@@ -1,0 +1,126 @@
+# ImageStream - Defines the image repository
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: identity-access-service
+  labels:
+    app: identity-access-service
+spec:
+  lookupPolicy:
+    local: true
+---
+# BuildConfig - Builds the application image from source (Dockerfile)
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: identity-access-service
+  labels:
+    app: identity-access-service
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/AchilleasB/identity-access-service.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: identity-access-service:latest
+  triggers:
+    - type: ConfigChange
+---
+# Deployment - Runs the identity-access service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-access-service
+  labels:
+    app: identity-access-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: identity-access-service
+  template:
+    metadata:
+      labels:
+        app: identity-access-service
+    spec:
+      containers:
+        - name: identity-access-service
+          image: identity-access-service:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: identity-db-secret
+                  key: connection-string
+            - name: PRIVATE_KEY_PATH
+              value: "/etc/certs/private.pem"
+            - name: APP_VERSION
+              value: "1.0.0"
+          volumeMounts:
+            - name: private-key
+              mountPath: "/etc/certs"
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+      volumes:
+        - name: private-key
+          secret:
+            secretName: identity-private-key
+---
+# Service - Internal Networking for identity-access service
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-access-service
+  labels:
+    app: identity-access-service
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: identity-access-service
+---
+# Route - HTTPS handled by OKD router
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: identity-access-service
+  labels:
+    app: identity-access-service
+spec:
+  to:
+    kind: Service
+    name: identity-access-service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

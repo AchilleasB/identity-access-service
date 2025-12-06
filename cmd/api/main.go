@@ -15,39 +15,32 @@ import (
 )
 
 func main() {
-	// Load configuration from environment
 	cfg := config.Load()
 
-	// Initialize the database connection
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
-	if err = db.Ping(); err != nil {
-		log.Fatalf("failed to ping database: %v", err)
-	}
 
-	// Initialize the repository
 	var userRepo ports.UserRepository = repository.NewSQLRepository(db)
 
-	// Initialize the services
-	authService, err := services.NewAuthService(userRepo, cfg.JWTPrivateKey)
-	if err != nil {
-		log.Fatalf("failed to initialize auth service: %v", err)
-	}
-
+	authService := services.NewAuthService(userRepo, cfg.JWTPrivateKey)
 	registrationService := services.NewRegistrationService(userRepo)
 
-	// Initialize the handlers
 	authHandler := handler.NewAuthHandler(authService)
 	registrationHandler := handler.NewRegistrationHandler(registrationService)
+	healthHandler := handler.NewHealthHandler(db)
 
-	// Set up HTTP routes
+	// Health endpoints (OpenShift compatible)
+	http.HandleFunc("/health", healthHandler.Health)      // Detailed health
+	http.HandleFunc("/health/ready", healthHandler.Ready) // Readiness probe
+	http.HandleFunc("/health/live", healthHandler.Live)   // Liveness probe
+
+	// API endpoints
 	http.HandleFunc("/login", authHandler.Login)
 	http.HandleFunc("/register", registrationHandler.RegisterParent)
 
-	// Start the HTTP server
 	log.Printf("Starting server on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, nil); err != nil {
 		log.Fatalf("Could not start server: %s\n", err)

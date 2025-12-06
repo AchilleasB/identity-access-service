@@ -3,9 +3,9 @@ package services
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
-	"log"
-	"os"
 	"time"
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/domain"
@@ -19,21 +19,11 @@ type AuthService struct {
 	privateKey *rsa.PrivateKey
 }
 
-func NewAuthService(repo ports.UserRepository, privateKeyPath string) (*AuthService, error) {
-	keyBytes, err := os.ReadFile(privateKeyPath)
-	if err != nil {
-		log.Fatalf("FATAL: Could not read private key at %s: %v", privateKeyPath, err)
-	}
-
-	key, err := jwt.ParseRSAPrivateKeyFromPEM(keyBytes)
-	if err != nil {
-		log.Fatalf("FATAL: Could not parse RSA private key: %v", err)
-	}
-
+func NewAuthService(repo ports.UserRepository, privateKey *rsa.PrivateKey) *AuthService {
 	return &AuthService{
 		userRepo:   repo,
-		privateKey: key,
-	}, nil
+		privateKey: privateKey,
+	}
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (string, error) {
@@ -51,9 +41,17 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 		return "", err
 	}
 
-	s.userRepo.SaveToken(ctx, user.ID, token)
+	tokenHash := hashToken(token)
+	if err := s.userRepo.SaveToken(ctx, user.ID, tokenHash); err != nil {
+		return "", err
+	}
 
 	return token, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, token string) error {
+	tokenHash := hashToken(token)
+	return s.userRepo.BlacklistToken(ctx, tokenHash)
 }
 
 func (s *AuthService) generateJWT(uid string, role domain.Role) (string, error) {
@@ -71,4 +69,9 @@ func (s *AuthService) generateJWT(uid string, role domain.Role) (string, error) 
 		return "", err
 	}
 	return signedToken, nil
+}
+
+func hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }

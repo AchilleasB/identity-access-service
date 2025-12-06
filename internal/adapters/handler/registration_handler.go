@@ -19,7 +19,7 @@ type RegistrationRequest struct {
 	Email      string `json:"email"`
 	FirstName  string `json:"first_name"`
 	LastName   string `json:"last_name"`
-	RoomNumber int    `json:"room_number"`
+	RoomNumber string `json:"room_number"`
 }
 
 type RegistrationResponse struct {
@@ -48,9 +48,9 @@ func (h *RegistrationHandler) RegisterParent(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	resp := RegistrationResponse{
+
+	json.NewEncoder(w).Encode(RegistrationResponse{
 		Message:    "Registration successful",
 		AccessCode: accessCode,
-	}
-	json.NewEncoder(w).Encode(resp)
+	})
 }

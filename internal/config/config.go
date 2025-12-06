@@ -1,24 +1,32 @@
 package config
 
 import (
+	"crypto/rsa"
 	"os"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Config struct {
-	JWTPrivateKey string
+	JWTPrivateKey *rsa.PrivateKey
 	DatabaseURL   string
 	Port          string
 }
 
 func Load() *Config {
-	privateKey := os.Getenv("JWT_PRIVATE_KEY") // Path to the RSA private key file
-	if privateKey == "" {
-		panic("JWT_PRIVATE_KEY environment variable is required")
+	keyPath := os.Getenv("PRIVATE_KEY_PATH")
+	if keyPath == "" {
+		keyPath = "/etc/certs/private.pem"
 	}
 
-	dbURL := os.Getenv("DATABASE_URL")
+	privateKey, err := loadPrivateKey(keyPath)
+	if err != nil {
+		panic("Failed to load private key: " + err.Error())
+	}
+
+	dbURL := os.Getenv("DB_CONNECTION_STRING")
 	if dbURL == "" {
-		panic("DATABASE_URL environment variable is required")
+		panic("DB_CONNECTION_STRING environment variable is required")
 	}
 
 	port := os.Getenv("PORT")
@@ -31,4 +39,17 @@ func Load() *Config {
 		DatabaseURL:   dbURL,
 		Port:          port,
 	}
+}
+
+func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	keyData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
+	if err != nil {
+		return nil, err
+	}
+	return privateKey, nil
 }

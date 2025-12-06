@@ -21,7 +21,8 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Message string `json:"message"`
+	Token   string `json:"token"`
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -38,5 +39,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(LoginResponse{Token: token})
+	json.NewEncoder(w).Encode(LoginResponse{
+		Message: "Login successful",
+		Token:   token,
+	})
 }

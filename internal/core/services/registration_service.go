@@ -22,8 +22,7 @@ func NewRegistrationService(userRepo ports.UserRepository) *RegistrationService 
 
 func (s *RegistrationService) RegisterParent(
 	ctx context.Context,
-	email, firstName, lastName string,
-	roomNumber int,
+	email, firstName, lastName, roomNumber string,
 ) (string, error) {
 	// Generate and hash the access code before storing
 	accessCode, err := s.generateAccessCode()

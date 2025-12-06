@@ -21,5 +21,5 @@ type Parent struct {
 	User
 	FirstName  string `json:"first_name"`
 	LastName   string `json:"last_name"`
-	RoomNumber int    `json:"room_number"`
+	RoomNumber string `json:"room_number"`
 }

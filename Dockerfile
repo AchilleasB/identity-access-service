@@ -11,9 +11,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
 
 FROM alpine:latest
 
-WORKDIR /root/
+WORKDIR /app
 
 COPY --from=builder /app/main .
+RUN chmod 755 ./main
 
 EXPOSE 8080
 

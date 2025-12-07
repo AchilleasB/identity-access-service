@@ -17,6 +17,13 @@ metadata:
   labels:
     app: identity-access-service
 spec:
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: '1'
+    requests:
+      memory: 256Mi
+      cpu: 200m
   source:
     type: Git
     git:
@@ -41,7 +48,7 @@ metadata:
   labels:
     app: identity-access-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: identity-access-service

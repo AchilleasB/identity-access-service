@@ -20,6 +20,7 @@ EXPOSE 8080
 
 # CMD ["./main"]
 
-# Keep the container running for debugging purposes
-CMD ["sleep", "3600"] 
+# Try to run main. If (and when) it crashes, sleep for 1 hour.
+# This forces the crash logs to appear in the "Logs" tab without killing the pod.
+CMD ["sh", "-c", "./main; sleep 3600"]
 

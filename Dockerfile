@@ -18,5 +18,8 @@ RUN chmod 755 ./main
 
 EXPOSE 8080
 
-CMD ["./main"]
+# CMD ["./main"]
+
+# Keep the container running for debugging purposes
+CMD ["sleep", "3600"] 
 

@@ -18,9 +18,5 @@ RUN chmod 755 ./main
 
 EXPOSE 8080
 
-# CMD ["./main"]
-
-# Try to run main. If (and when) it crashes, sleep for 1 hour.
-# This forces the crash logs to appear in the "Logs" tab without killing the pod.
-CMD ["sh", "-c", "./main; sleep 3600"]
+CMD ["./main"]
 

@@ -8,6 +8,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/handler"
+	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/middleware"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/repository"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/config"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/ports"
@@ -26,23 +27,30 @@ func main() {
 	var userRepo ports.UserRepository = repository.NewSQLRepository(db)
 
 	authService := services.NewAuthService(userRepo, cfg.JWTPrivateKey)
+	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTPublicKey)
 	registrationService := services.NewRegistrationService(userRepo)
 
 	authHandler := handler.NewAuthHandler(authService)
 	registrationHandler := handler.NewRegistrationHandler(registrationService)
 	healthHandler := handler.NewHealthHandler(db)
 
+	mux := http.NewServeMux()
+
 	// Health endpoints (OpenShift compatible)
-	http.HandleFunc("/health", healthHandler.Health)      // Detailed health
-	http.HandleFunc("/health/ready", healthHandler.Ready) // Readiness probe
-	http.HandleFunc("/health/live", healthHandler.Live)   // Liveness probe
+	mux.HandleFunc("GET /health", healthHandler.Health)
+	mux.HandleFunc("GET /health/ready", healthHandler.Ready)
+	mux.HandleFunc("GET /health/live", healthHandler.Live)
 
 	// API endpoints
-	http.HandleFunc("/login", authHandler.Login)
-	http.HandleFunc("/register", registrationHandler.RegisterParent)
+	mux.HandleFunc("POST /login", authHandler.Login)
+	mux.Handle("POST /register",
+		authMiddleware.RequireRole("ADMIN")(
+			http.HandlerFunc(registrationHandler.RegisterParent),
+		),
+	)
 
 	log.Printf("Starting server on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, nil); err != nil {
+	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
 		log.Fatalf("Could not start server: %s\n", err)
 	}
 }

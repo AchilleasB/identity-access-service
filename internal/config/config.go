@@ -8,10 +8,13 @@ import (
 )
 
 type Config struct {
-	JWTPrivateKey *rsa.PrivateKey
-	JWTPublicKey  *rsa.PublicKey
-	DatabaseURL   string
-	Port          string
+	JWTPrivateKey      *rsa.PrivateKey
+	JWTPublicKey       *rsa.PublicKey
+	DatabaseURL        string
+	Port               string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
 }
 
 func Load() *Config {
@@ -38,16 +41,34 @@ func Load() *Config {
 		panic("DB_CONNECTION_STRING environment variable is required")
 	}
 
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if googleClientID == "" {
+		panic("GOOGLE_CLIENT_ID environment variable is required")
+	}
+
+	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	if googleClientSecret == "" {
+		panic("GOOGLE_CLIENT_SECRET environment variable is required")
+	}
+
+	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
+	if googleRedirectURL == "" {
+		panic("GOOGLE_REDIRECT_URL environment variable is required")
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
 	return &Config{
-		JWTPrivateKey: privateKey,
-		JWTPublicKey:  publicKey,
-		DatabaseURL:   dbURL,
-		Port:          port,
+		JWTPrivateKey:      privateKey,
+		JWTPublicKey:       publicKey,
+		DatabaseURL:        dbURL,
+		Port:               port,
+		GoogleClientID:     googleClientID,
+		GoogleClientSecret: googleClientSecret,
+		GoogleRedirectURL:  googleRedirectURL,
 	}
 }
 

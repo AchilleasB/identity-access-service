@@ -3,95 +3,106 @@ package middleware
 import (
 	"context"
 	"crypto/rsa"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type contextKey string
-
-const (
-	UserClaimsKey contextKey = "userClaims"
-)
-
-type UserClaims struct {
-	UserID string
-	Email  string
-	Role   string
-}
-
 type AuthMiddleware struct {
 	publicKey *rsa.PublicKey
 }
 
 func NewAuthMiddleware(publicKey *rsa.PublicKey) *AuthMiddleware {
-	return &AuthMiddleware{publicKey: publicKey}
+	return &AuthMiddleware{
+		publicKey: publicKey,
+	}
 }
 
-func (m *AuthMiddleware) RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, "Authorization header required", http.StatusUnauthorized)
-				return
+type contextKey string
+
+const (
+	UserIDKey contextKey = "userID"
+	RoleKey   contextKey = "role"
+)
+
+func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract token from header
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			log.Printf("Missing Authorization header")
+			http.Error(w, "missing authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			log.Printf("Invalid Authorization header format")
+			http.Error(w, "invalid authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		tokenString := parts[1]
+
+		// Parse and validate token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, jwt.ErrSignatureInvalid
 			}
-
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
-				return
-			}
-
-			tokenString := parts[1]
-
-			// Parse and validate JWT
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				// Verify signing method is RSA
-				if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-					return nil, jwt.ErrSignatureInvalid
-				}
-				return m.publicKey, nil
-			})
-
-			if err != nil || !token.Valid {
-				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-				return
-			}
-
-			// Extract claims
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-				return
-			}
-
-			role, _ := claims["role"].(string)
-
-			// Check if user has required role
-			roleAllowed := false
-			for _, allowedRole := range allowedRoles {
-				if role == allowedRole {
-					roleAllowed = true
-					break
-				}
-			}
-
-			if !roleAllowed {
-				http.Error(w, "Insufficient permissions", http.StatusForbidden)
-				return
-			}
-
-			// Add claims to context for use in handlers
-			userClaims := UserClaims{
-				UserID: claims["sub"].(string),
-				Email:  claims["email"].(string),
-				Role:   role,
-			}
-			ctx := context.WithValue(r.Context(), UserClaimsKey, userClaims)
-
-			next.ServeHTTP(w, r.WithContext(ctx))
+			return m.publicKey, nil
 		})
+
+		if err != nil {
+			log.Printf("Token parse error: %v", err)
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		if !token.Valid {
+			log.Printf("Token not valid")
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		// Extract claims safely
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			log.Printf("Failed to extract claims")
+			http.Error(w, "invalid token claims", http.StatusUnauthorized)
+			return
+		}
+
+		// Safely get userID
+		userID, ok := claims["sub"].(string)
+		if !ok || userID == "" {
+			log.Printf("Missing or invalid 'sub' claim: %v", claims["sub"])
+			http.Error(w, "invalid token: missing user ID", http.StatusUnauthorized)
+			return
+		}
+
+		// Safely get role
+		userRole, ok := claims["role"].(string)
+		if !ok || userRole == "" {
+			log.Printf("Missing or invalid 'role' claim: %v", claims["role"])
+			http.Error(w, "invalid token: missing role", http.StatusUnauthorized)
+			return
+		}
+
+		log.Printf("Token validated - UserID: %s, Role: %s", userID, userRole)
+
+		// Check role
+		if userRole != role {
+			log.Printf("Role mismatch: required %s, got %s", role, userRole)
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Add to context
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
+		ctx = context.WithValue(ctx, RoleKey, userRole)
+
+		next(w, r.WithContext(ctx))
 	}
 }

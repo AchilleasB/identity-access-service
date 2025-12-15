@@ -17,32 +17,41 @@ func NewRegistrationHandler(registration ports.RegistrationService) *Registratio
 
 type RegistrationRequest struct {
 	Email      string `json:"email"`
+	Role       string `json:"role"`
 	FirstName  string `json:"first_name"`
 	LastName   string `json:"last_name"`
-	RoomNumber string `json:"room_number"`
+	RoomNumber string `json:"room_number,omitempty"`
 }
 
 type RegistrationResponse struct {
-	Message    string `json:"message"`
-	AccessCode string `json:"access_code"`
+	Message string `json:"message"`
 }
 
-func (h *RegistrationHandler) RegisterParent(w http.ResponseWriter, r *http.Request) {
+func (h *RegistrationHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegistrationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
-	accessCode, err := h.registrationService.RegisterParent(
-		r.Context(),
-		req.Email,
-		req.FirstName,
-		req.LastName,
-		req.RoomNumber,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	var message string
+	var err error
+
+	switch req.Role {
+	case "PARENT":
+		message, err = h.registrationService.RegisterParent(r.Context(), req.Email, req.FirstName, req.LastName, req.RoomNumber)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	case "ADMIN":
+		message, err = h.registrationService.RegisterAdmin(r.Context(), req.Email, req.FirstName, req.LastName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	default:
+		http.Error(w, "Unsupported role", http.StatusBadRequest)
 		return
 	}
 
@@ -50,7 +59,6 @@ func (h *RegistrationHandler) RegisterParent(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusCreated)
 
 	json.NewEncoder(w).Encode(RegistrationResponse{
-		Message:    "Registration successful",
-		AccessCode: accessCode,
+		Message: message,
 	})
 }

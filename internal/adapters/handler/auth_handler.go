@@ -2,45 +2,93 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
-	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/ports"
+	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/services"
 )
 
-type AuthHandler struct {
-	authService ports.AuthService
+type OAuthHandler struct {
+	oauth *services.GoogleOAuthService
 }
 
-func NewAuthHandler(auth ports.AuthService) *AuthHandler {
-	return &AuthHandler{authService: auth}
+func NewOAuthHandler(oauth *services.GoogleOAuthService) *OAuthHandler {
+	return &OAuthHandler{oauth: oauth}
 }
 
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
+func (h *OAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Login endpoint hit: %s %s", r.Method, r.URL.Path)
 
-type LoginResponse struct {
-	Message string `json:"message"`
-	Token   string `json:"token"`
-}
-
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	token, err := h.authService.Login(r.Context(), req.Email, req.Password)
+	state, err := h.oauth.GenerateState()
 	if err != nil {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		log.Printf("Failed to generate state: %v", err)
+		http.Error(w, "failed to generate state", http.StatusInternalServerError)
 		return
 	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		Path:     "/",
+		MaxAge:   600,
+		HttpOnly: true,
+		// Secure:   false, // Important: false for localhost
+		// SameSite: http.SameSiteLaxMode,
+	})
+
+	log.Printf("State cookie set: %s", state)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(LoginResponse{
-		Message: "Login successful",
-		Token:   token,
+	json.NewEncoder(w).Encode(map[string]string{
+		"redirect_url": h.oauth.GetAuthURL(state),
+	})
+}
+
+func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Method: %s", r.Method)
+	log.Printf("URL: %s", r.URL.String())
+	log.Printf("Headers: %v", r.Header)
+
+	stateCookie, err := r.Cookie("oauth_state")
+	if err != nil {
+		log.Printf("Missing state cookie: %v", err)
+		log.Printf("All cookies: %v", r.Cookies())
+		http.Error(w, "missing state cookie", http.StatusBadRequest)
+		return
+	}
+
+	stateParam := r.URL.Query().Get("state")
+	if stateParam != stateCookie.Value {
+		log.Printf("State mismatch")
+		http.Error(w, "invalid state", http.StatusForbidden)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:   "oauth_state",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "missing code", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Exchanging code...")
+	token, err := h.oauth.Authenticate(r.Context(), code)
+	if err != nil {
+		log.Printf("Auth failed: %v", err)
+		http.Error(w, "authentication failed: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("Success!")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Logged in successfully!",
+		"token":   token,
 	})
 }

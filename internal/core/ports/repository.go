@@ -8,7 +8,8 @@ import (
 
 type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (*domain.User, error)
-	CreateParent(ctx context.Context, parent domain.Parent) error
+	CreateParent(ctx context.Context, parent domain.Parent) (*domain.Parent, error)
+	CreateAdmin(ctx context.Context, user domain.User) (*domain.User, error)
 	SaveToken(ctx context.Context, userID, token string) error
 	BlacklistToken(ctx context.Context, token string) error
 }

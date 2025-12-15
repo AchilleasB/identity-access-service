@@ -5,9 +5,10 @@ A microservice for authentication and authorization in the Baby Kliniek system. 
 ## Overview
 
 This service handles:
-- **User Registration** - Parents register with email and receive an access code
-- **Authentication** - Login with email/password, receive JWT token
-- **Token Management** - JWT signing with RSA, token blacklisting on logout
+- **Google OAuth Authentication** - Users authenticate via Google, no passwords stored
+- **User Registration** - Admins register Parents and other Admins
+- **JWT Token Management** - System JWTs signed with RSA for stateless authorization across microservices
+- **Role-Based Access Control** - Admin and Parent roles with route-level enforcement
 - **Health Checks** - Liveness and readiness probes for container orchestration
 
 ## Architecture
@@ -22,6 +23,33 @@ This service handles:
 │   │  (HTTP)     │     │  (Business)     │     │  (PostgreSQL)   │       │
 │   └─────────────┘     └─────────────────┘     └─────────────────┘       │
 │        Adapters              Core                   Adapters            │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Authentication Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Google OAuth Flow                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  1. POST /login                                                         │
+│     → Generate cryptographic state                                      │
+│     → Store state in HttpOnly cookie                                    │
+│     → Return Google OAuth redirect URL                                  │
+│                                                                         │
+│  2. User authenticates with Google                                      │
+│     → Google verifies credentials                                       │
+│     → Google redirects to callback with code + state                    │
+│                                                                         │
+│  3. GET /auth/google/callback                                           │
+│     → Verify state matches cookie (CSRF protection)                     │
+│     → Exchange authorization code for tokens                            │
+│     → Verify Google ID token signature via JWKS                         │
+│     → Extract email from verified token                                 │
+│     → Lookup user in database by email                                  │
+│     → Issue system JWT if user exists                                   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -65,21 +93,21 @@ identity-access-service/
 
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
-| `POST` | `/register` | Register a new parent | No |
-| `POST` | `/login` | Authenticate and get JWT | No |
-| `POST` | `/logout` | Invalidate JWT token | Yes (Bearer) |
+| `POST` | `/login` | Initiate Google OAuth, returns redirect URL | No |
+| `GET` | `/auth/google/callback` | Handle OAuth callback, returns JWT | No |
+| `POST` | `/register` | Register Admin or Parent | Admin JWT |
 | `GET` | `/health` | Detailed health status | No |
 | `GET` | `/health/live` | Liveness probe | No |
 | `GET` | `/health/ready` | Readiness probe | No |
 
 ## Security
 
-- Passwords hashed with **bcrypt**
-- JWTs signed with **RS256** (RSA + SHA256)
-- Tokens stored as **SHA256 hashes** (not raw)
-- HTTPS handled by OKD Route (TLS termination)
-- Secrets managed via OKD Secrets
+- **No Password Storage** - Authentication delegated to Google OAuth
+- **CSRF Protection** - State parameter with HttpOnly cookies
+- **JWT Signing** - RS256 (RSA + SHA256) asymmetric encryption
+- **Token Verification** - Google ID tokens verified via JWKS
+- **Role-Based Access** - Admin-only registration endpoint
+- **HTTPS** - TLS termination at OKD Route level
 
 ## License
-
 MIT

@@ -7,7 +7,7 @@ A microservice for authentication and authorization in the Baby Kliniek system. 
 This service handles:
 - **Google OAuth Authentication** - Users authenticate via Google, no passwords stored
 - **User Registration** - Admins register Parents and other Admins
-- **JWT Token Management** - System JWTs signed with RSA for stateless auth
+- **JWT Token Management** - System JWTs signed with RSA for stateless authorization across microservices
 - **Role-Based Access Control** - Admin and Parent roles with route-level enforcement
 - **Health Checks** - Liveness and readiness probes for container orchestration
 

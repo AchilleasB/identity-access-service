@@ -57,6 +57,25 @@ spec:
       labels:
         app: identity-access-service
     spec:
+      initContainers:
+        - name: db-migration
+          image: identity-access-service:latest
+          command:
+            - /app/identity-access-service
+            - migrate
+          env:
+            - name: DB_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: identity-db-secret
+                  key: connection-string
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
       containers:
         - name: identity-access-service
           image: identity-access-service:latest
@@ -70,10 +89,27 @@ spec:
                   key: connection-string
             - name: PRIVATE_KEY_PATH
               value: "/etc/certs/private.pem"
+            - name: PUBLIC_KEY_PATH
+              value: "/etc/certs/public.pem"
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: google-oauth-secrets
+                  key: client-id
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: google-oauth-secrets
+                  key: client-secret
+            - name: GOOGLE_REDIRECT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: identity-oauth-config
+                  key: google-redirect-url
             - name: APP_VERSION
               value: "1.0.0"
           volumeMounts:
-            - name: private-key
+            - name: jwt-keys
               mountPath: "/etc/certs"
               readOnly: true
           livenessProbe:
@@ -90,15 +126,15 @@ spec:
             periodSeconds: 5
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
               memory: "256Mi"
-              cpu: "200m"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
       volumes:
-        - name: private-key
+        - name: jwt-keys
           secret:
-            secretName: identity-private-key
+            secretName: identity-rsa-keys
 ---
 # Service - Internal Networking for identity-access service
 apiVersion: v1

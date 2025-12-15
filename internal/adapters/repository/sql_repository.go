@@ -70,7 +70,7 @@ func (r *SQLRepository) CreateAdmin(ctx context.Context, user domain.User) (*dom
 
 func (r *SQLRepository) SaveToken(ctx context.Context, userID, token string) error {
 	_, err := r.db.Exec(
-		"INSERT INTO tokens (user_id, token) VALUES ($1, $2)",
+		"INSERT INTO tokens (user_id, token_hash, created_at, expires_at) VALUES ($1, $2, NOW(), NOW() + INTERVAL '7 days')",
 		userID,
 		token,
 	)

@@ -26,27 +26,33 @@ func main() {
 
 	var userRepo ports.UserRepository = repository.NewSQLRepository(db)
 
-	authService := services.NewAuthService(userRepo, cfg.JWTPrivateKey)
+	authService := services.NewGoogleOAuthService(
+		cfg.GoogleClientID,
+		cfg.GoogleClientSecret,
+		cfg.GoogleRedirectURL,
+		userRepo,
+		cfg.JWTPrivateKey,
+	)
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTPublicKey)
 	registrationService := services.NewRegistrationService(userRepo)
 
-	authHandler := handler.NewAuthHandler(authService)
+	oauthHandler := handler.NewOAuthHandler(authService)
 	registrationHandler := handler.NewRegistrationHandler(registrationService)
 	healthHandler := handler.NewHealthHandler(db)
 
 	mux := http.NewServeMux()
 
 	// Health endpoints (OpenShift compatible)
-	mux.HandleFunc("GET /health", healthHandler.Health)
-	mux.HandleFunc("GET /health/ready", healthHandler.Ready)
-	mux.HandleFunc("GET /health/live", healthHandler.Live)
+	mux.HandleFunc("/health", healthHandler.Health)
+	mux.HandleFunc("/health/ready", healthHandler.Ready)
+	mux.HandleFunc("/health/live", healthHandler.Live)
 
 	// API endpoints
-	mux.HandleFunc("POST /login", authHandler.Login)
-	mux.Handle("POST /register",
-		authMiddleware.RequireRole("ADMIN")(
-			http.HandlerFunc(registrationHandler.RegisterParent),
-		),
+	mux.HandleFunc("/login", oauthHandler.Login)
+	mux.HandleFunc("/auth/google/callback", oauthHandler.Callback)
+
+	mux.Handle("/register",
+		authMiddleware.RequireRole("ADMIN", http.HandlerFunc(registrationHandler.Register)),
 	)
 
 	log.Printf("Starting server on :%s", cfg.Port)

@@ -22,49 +22,50 @@ func (r *SQLRepository) FindByEmail(ctx context.Context, email string) (*domain.
 	var user domain.User
 	err := r.db.QueryRowContext(
 		ctx,
-		"SELECT id, email, role, password, created_at FROM users WHERE email = $1",
+		"SELECT id, email, role, first_name, last_name, created_at FROM users WHERE email = $1",
 		email,
-	).Scan(&user.ID, &user.Email, &user.Role, &user.Password, &user.CreatedAt)
+	).Scan(&user.ID, &user.Email, &user.Role, &user.FirstName, &user.LastName, &user.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent) error {
+func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent) (*domain.Parent, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO users (id, email, role, password, created_at) VALUES ($1, $2, $3, $4, $5)",
-		parent.ID,
-		parent.Email,
-		parent.Role,
-		parent.Password,
-		parent.CreatedAt,
+		"INSERT INTO users (id, email, role, first_name, last_name, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+		parent.ID, parent.Email, parent.Role, parent.FirstName, parent.LastName, parent.CreatedAt,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO parents (user_id, first_name, last_name, room_number) VALUES ($1, $2, $3, $4)",
-		parent.ID,
-		parent.FirstName,
-		parent.LastName,
-		parent.RoomNumber,
+		"INSERT INTO parents (user_id, room_number) VALUES ($1, $2)",
+		parent.ID, parent.RoomNumber,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return &parent, nil
+}
+
+func (r *SQLRepository) CreateAdmin(ctx context.Context, user domain.User) (*domain.User, error) {
+	_, err := r.db.ExecContext(ctx,
+		"INSERT INTO users (id, email, role, first_name, last_name, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+		user.ID, user.Email, user.Role, user.FirstName, user.LastName, user.CreatedAt,
+	)
+	return &user, err
 }
 
 func (r *SQLRepository) SaveToken(ctx context.Context, userID, token string) error {

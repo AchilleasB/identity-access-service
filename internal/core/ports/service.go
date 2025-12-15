@@ -11,4 +11,5 @@ type AuthService interface {
 
 type RegistrationService interface {
 	RegisterParent(ctx context.Context, email, firstName, lastName, roomNumber string) (string, error)
+	RegisterAdmin(ctx context.Context, email, firstName, lastName string) (string, error)
 }

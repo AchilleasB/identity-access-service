@@ -19,11 +19,6 @@ func NewOAuthHandler(oauth *services.GoogleOAuthService) *OAuthHandler {
 func (h *OAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Login endpoint hit: %s %s", r.Method, r.URL.Path)
 
-	// if r.Method != http.MethodPost {
-	// 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	// 	return
-	// }
-
 	state, err := h.oauth.GenerateState()
 	if err != nil {
 		log.Printf("Failed to generate state: %v", err)

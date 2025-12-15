@@ -57,25 +57,6 @@ spec:
       labels:
         app: identity-access-service
     spec:
-      initContainers:
-        - name: db-migration
-          image: identity-access-service:latest
-          command:
-            - /app/identity-access-service
-            - migrate
-          env:
-            - name: DB_CONNECTION_STRING
-              valueFrom:
-                secretKeyRef:
-                  name: identity-db-secret
-                  key: connection-string
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
-              memory: "128Mi"
-              cpu: "100m"
       containers:
         - name: identity-access-service
           image: identity-access-service:latest

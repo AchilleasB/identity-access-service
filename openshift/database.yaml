@@ -1,3 +1,51 @@
+# ConfigMap - Database initialization script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: identity-db-init
+  labels:
+    app: identity-access-service
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(36) PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS parents (
+        user_id VARCHAR(36) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        room_number VARCHAR(20)
+    );
+
+    CREATE TABLE IF NOT EXISTS tokens (
+        token_hash VARCHAR(64) PRIMARY KEY,
+        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
+    );
+
+
+    CREATE TABLE IF NOT EXISTS token_blacklist (
+        token_hash VARCHAR(64) PRIMARY KEY,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_blacklist_hash ON token_blacklist(token_hash);
+
+    -- Seed initial admin 
+    INSERT INTO users (id, email, first_name, last_name, role)
+    VALUES (
+        'a0000000-0000-0000-0000-000000000001',
+        'ahilleasballanos@gmail.com',
+        'System',
+        'Admin',
+        'ADMIN'
+    ) ON CONFLICT (email) DO NOTHING;
+---
 # PersistentVolumeClaim - Storage for database
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -47,6 +95,8 @@ spec:
                   key: password
             - name: POSTGRES_DB
               value: identity_db
+            - name: PGDATA
+              value: /var/lib/postgresql/data/mydata  
           volumeMounts:
             - name: db-data
               mountPath: /var/lib/postgresql/data

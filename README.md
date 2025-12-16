@@ -91,14 +91,14 @@ identity-access-service/
 
 ## API Endpoints
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `POST` | `/login` | Initiate Google OAuth, returns redirect URL | No |
-| `GET` | `/auth/google/callback` | Handle OAuth callback, returns JWT | No |
-| `POST` | `/register` | Register Admin or Parent | Admin JWT |
-| `GET` | `/health` | Detailed health status | No |
-| `GET` | `/health/live` | Liveness probe | No |
-| `GET` | `/health/ready` | Readiness probe | No |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/login` | Initiate Google OAuth, returns redirect URL |
+| `GET` | `/auth/google/callback` | Handle OAuth callback, returns JWT |
+| `POST` | `/register` | Register Admin or Parent |
+| `GET` | `/health` | Detailed health status |
+| `GET` | `/health/live` | Liveness probe |
+| `GET` | `/health/ready` | Readiness probe |
 
 ## Security
 

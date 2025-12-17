@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"os"
 
-	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
@@ -20,12 +18,6 @@ import (
 )
 
 func main() {
-
-	// Check for "migrate" argument to run migrations
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		runMigrations()
-		os.Exit(0)
-	}
 
 	cfg := config.Load()
 
@@ -70,23 +62,4 @@ func main() {
 	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
 		log.Fatalf("Could not start server: %s\n", err)
 	}
-}
-
-func runMigrations() {
-	// 1. Get the DB connection string from the environment variable (passed via Secret)
-	dbURL := os.Getenv("DB_CONNECTION_STRING")
-
-	// 2. Create the migrator instance
-	// Note: Migrations are embedded in the Docker image at /migrations
-	m, err := migrate.New("file:///migrations", dbURL)
-	if err != nil {
-		log.Fatalf("Migration initialization failed: %v", err)
-	}
-
-	// 3. Apply all pending migrations
-	log.Println("Applying database migrations...")
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatalf("Migration failed: %v", err)
-	}
-	log.Println("Migrations applied successfully!")
 }

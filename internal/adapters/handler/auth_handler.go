@@ -42,7 +42,7 @@ func (h *OAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(map[string]string{
 		"redirect_url": h.oauth.GetAuthURL(state),
 	}); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		log.Printf("Failed to encode response: %v", err)
 	}
 }
 
@@ -93,6 +93,6 @@ func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		"message": "Logged in successfully!",
 		"token":   token,
 	}); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		log.Printf("Failed to encode response: %v", err)
 	}
 }

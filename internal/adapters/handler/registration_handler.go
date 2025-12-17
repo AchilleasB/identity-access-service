@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/ports"
@@ -40,18 +41,15 @@ func (h *RegistrationHandler) Register(w http.ResponseWriter, r *http.Request) {
 	switch req.Role {
 	case "PARENT":
 		message, err = h.registrationService.RegisterParent(r.Context(), req.Email, req.FirstName, req.LastName, req.RoomNumber)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 	case "ADMIN":
 		message, err = h.registrationService.RegisterAdmin(r.Context(), req.Email, req.FirstName, req.LastName)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 	default:
 		http.Error(w, "Unsupported role", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, "Registration failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -61,6 +59,6 @@ func (h *RegistrationHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(RegistrationResponse{
 		Message: message,
 	}); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		log.Printf("Failed to write response: %v", err)
 	}
 }

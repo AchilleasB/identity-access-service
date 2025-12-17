@@ -39,9 +39,11 @@ func (h *OAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	log.Printf("State cookie set: %s", state)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"redirect_url": h.oauth.GetAuthURL(state),
-	})
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
@@ -87,8 +89,10 @@ func (h *OAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Success!")
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"message": "Logged in successfully!",
 		"token":   token,
-	})
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }

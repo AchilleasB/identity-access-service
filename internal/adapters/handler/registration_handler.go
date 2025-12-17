@@ -58,7 +58,9 @@ func (h *RegistrationHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
-	json.NewEncoder(w).Encode(RegistrationResponse{
+	if err := json.NewEncoder(w).Encode(RegistrationResponse{
 		Message: message,
-	})
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }

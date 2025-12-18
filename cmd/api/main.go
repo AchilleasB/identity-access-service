@@ -11,7 +11,6 @@ import (
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/middleware"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/repository"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/config"
-	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/ports"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/services"
 )
 
@@ -25,7 +24,7 @@ func main() {
 	}
 	defer db.Close()
 
-	var userRepo ports.UserRepository = repository.NewSQLRepository(db)
+	userRepo := repository.NewSQLRepository(db)
 
 	authService := services.NewGoogleOAuthService(
 		cfg.GoogleClientID,

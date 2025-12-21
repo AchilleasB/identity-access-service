@@ -67,6 +67,8 @@ identity-access-service/
 │   │   │   ├── auth_handler.go
 │   │   │   ├── registration_handler.go
 │   │   │   └── health_handler.go
+│   │   ├── middleware/          # Middleware implementation
+│   │   │   └── auth_middleware.go
 │   │   └── repository/          # Database implementation
 │   │       └── sql_repository.go
 │   ├── core/

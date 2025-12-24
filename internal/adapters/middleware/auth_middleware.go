@@ -27,7 +27,7 @@ const (
 	RoleKey   contextKey = "role"
 )
 
-func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.HandlerFunc {
+func (m *AuthMiddleware) RequireRole(roles []string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract token from header
 		authHeader := r.Header.Get("Authorization")
@@ -46,7 +46,6 @@ func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.Ha
 
 		tokenString := parts[1]
 
-		// Parse and validate token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 				return nil, jwt.ErrSignatureInvalid
@@ -66,7 +65,6 @@ func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.Ha
 			return
 		}
 
-		// Extract claims safely
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			log.Printf("Failed to extract claims")
@@ -74,7 +72,6 @@ func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.Ha
 			return
 		}
 
-		// Safely get userID
 		userID, ok := claims["sub"].(string)
 		if !ok || userID == "" {
 			log.Printf("Missing or invalid 'sub' claim: %v", claims["sub"])
@@ -82,7 +79,6 @@ func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.Ha
 			return
 		}
 
-		// Safely get role
 		userRole, ok := claims["role"].(string)
 		if !ok || userRole == "" {
 			log.Printf("Missing or invalid 'role' claim: %v", claims["role"])
@@ -92,14 +88,19 @@ func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.Ha
 
 		log.Printf("Token validated - UserID: %s, Role: %s", userID, userRole)
 
-		// Check role
-		if userRole != role {
-			log.Printf("Role mismatch: required %s, got %s", role, userRole)
+		allowedRoles := false
+		for _, r := range roles {
+			if userRole == r {
+				allowedRoles = true
+				break
+			}
+		}
+		if !allowedRoles {
+			log.Printf("Role mismatch: required one of %v, got %s", roles, userRole)
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
-		// Add to context
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		ctx = context.WithValue(ctx, RoleKey, userRole)
 

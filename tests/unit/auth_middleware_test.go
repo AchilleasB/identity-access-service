@@ -42,7 +42,7 @@ func TestRequireRole_NoAuthHeader(t *testing.T) {
 	_, publicKey := generateTestKeys(t)
 	middleware := NewAuthMiddleware(publicKey)
 
-	handler := middleware.RequireRole("ADMIN", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -60,7 +60,7 @@ func TestRequireRole_InvalidHeaderFormat(t *testing.T) {
 	_, publicKey := generateTestKeys(t)
 	middleware := NewAuthMiddleware(publicKey)
 
-	handler := middleware.RequireRole("ADMIN", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -79,7 +79,7 @@ func TestRequireRole_InvalidToken(t *testing.T) {
 	_, publicKey := generateTestKeys(t)
 	middleware := NewAuthMiddleware(publicKey)
 
-	handler := middleware.RequireRole("ADMIN", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -100,7 +100,7 @@ func TestRequireRole_ExpiredToken(t *testing.T) {
 
 	token := createTestToken(privateKey, "ADMIN", true) // expired
 
-	handler := middleware.RequireRole("ADMIN", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -121,7 +121,7 @@ func TestRequireRole_WrongRole(t *testing.T) {
 
 	token := createTestToken(privateKey, "PARENT", false) // wrong role
 
-	handler := middleware.RequireRole("ADMIN", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -143,7 +143,7 @@ func TestRequireRole_ValidAdminToken(t *testing.T) {
 	token := createTestToken(privateKey, "ADMIN", false) // valid admin
 
 	handlerCalled := false
-	handler := middleware.RequireRole("ADMIN", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		// Verify claims are in context
 		claims, ok := r.Context().Value(RoleKey).(string)

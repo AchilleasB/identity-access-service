@@ -32,6 +32,7 @@ func (s *RegistrationService) RegisterParent(
 			LastName:  lastName,
 		},
 		RoomNumber: roomNumber,
+		Status:     domain.StatusActive,
 	}
 
 	_, err := s.userRepo.CreateParent(ctx, parent)

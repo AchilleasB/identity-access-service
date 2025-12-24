@@ -52,7 +52,7 @@ func main() {
 	mux.HandleFunc("/auth/google/callback", oauthHandler.Callback)
 
 	mux.Handle("/register",
-		authMiddleware.RequireRole("ADMIN", http.HandlerFunc(registrationHandler.Register)),
+		authMiddleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(registrationHandler.Register)),
 	)
 
 	log.Printf("Starting server on :%s", cfg.Port)

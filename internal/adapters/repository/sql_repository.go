@@ -47,8 +47,8 @@ func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent) 
 	}
 
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO parents (user_id, room_number) VALUES ($1, $2)",
-		parent.ID, parent.RoomNumber,
+		"INSERT INTO parents (user_id, room_number, status) VALUES ($1, $2, $3)",
+		parent.ID, parent.RoomNumber, string(parent.Status),
 	)
 	if err != nil {
 		return nil, err

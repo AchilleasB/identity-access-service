@@ -17,8 +17,9 @@ data:
     );
 
     CREATE TABLE IF NOT EXISTS parents (
-        user_id VARCHAR(36) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        room_number VARCHAR(20)
+      user_id VARCHAR(36) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      room_number VARCHAR(20),
+      status VARCHAR(20) NOT NULL DEFAULT 'Active'
     );
 
     CREATE TABLE IF NOT EXISTS tokens (

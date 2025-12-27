@@ -9,6 +9,13 @@ const (
 	RoleParent Role = "PARENT"
 )
 
+type ParentStatus string
+
+const (
+	ParentActive     ParentStatus = "Active"
+	ParentDischarged ParentStatus = "Discharged"
+)
+
 type User struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`

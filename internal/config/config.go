@@ -15,6 +15,8 @@ type Config struct {
 	GoogleClientID     string
 	GoogleClientSecret string
 	GoogleRedirectURL  string
+	RedisAddress       string
+	RedisPassword      string
 }
 
 func Load() *Config {
@@ -56,6 +58,16 @@ func Load() *Config {
 		panic("GOOGLE_REDIRECT_URL environment variable is required")
 	}
 
+	redisAddress := os.Getenv("REDIS_ADDRESS")
+	if redisAddress == "" {
+		panic("REDIS_ADDRESS environment variable is required")
+	}
+
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	if redisPassword == "" {
+		panic("REDIS_PASSWORD environment variable is required")
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -69,6 +81,8 @@ func Load() *Config {
 		GoogleClientID:     googleClientID,
 		GoogleClientSecret: googleClientSecret,
 		GoogleRedirectURL:  googleRedirectURL,
+		RedisAddress:       redisAddress,
+		RedisPassword:      redisPassword,
 	}
 }
 

@@ -8,28 +8,31 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 type AuthMiddleware struct {
-	publicKey *rsa.PublicKey
+	publicKey   *rsa.PublicKey
+	redisClient *redis.Client
 }
 
-func NewAuthMiddleware(publicKey *rsa.PublicKey) *AuthMiddleware {
+func NewAuthMiddleware(publicKey *rsa.PublicKey, redisClient *redis.Client) *AuthMiddleware {
 	return &AuthMiddleware{
-		publicKey: publicKey,
+		publicKey:   publicKey,
+		redisClient: redisClient,
 	}
 }
 
-type contextKey string
+type ContextKey string
 
 const (
-	UserIDKey contextKey = "userID"
-	RoleKey   contextKey = "role"
+	UserIDKey ContextKey = "userID"
+	RoleKey   ContextKey = "role"
+	TokenKey  ContextKey = "token"
 )
 
 func (m *AuthMiddleware) RequireRole(roles []string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract token from header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			log.Printf("Missing Authorization header")
@@ -37,14 +40,7 @@ func (m *AuthMiddleware) RequireRole(roles []string, next http.HandlerFunc) http
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			log.Printf("Invalid Authorization header format")
-			http.Error(w, "invalid authorization header", http.StatusUnauthorized)
-			return
-		}
-
-		tokenString := parts[1]
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
@@ -53,38 +49,24 @@ func (m *AuthMiddleware) RequireRole(roles []string, next http.HandlerFunc) http
 			return m.publicKey, nil
 		})
 
-		if err != nil {
-			log.Printf("Token parse error: %v", err)
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return
-		}
-
-		if !token.Valid {
-			log.Printf("Token not valid")
+		if err != nil || !token.Valid {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			log.Printf("Failed to extract claims")
 			http.Error(w, "invalid token claims", http.StatusUnauthorized)
 			return
 		}
 
-		userID, ok := claims["sub"].(string)
-		if !ok || userID == "" {
-			log.Printf("Missing or invalid 'sub' claim: %v", claims["sub"])
-			http.Error(w, "invalid token: missing user ID", http.StatusUnauthorized)
+		if revoked := m.isBlacklisted(claims, r.Context()); revoked {
+			http.Error(w, "token revoked", http.StatusUnauthorized)
 			return
 		}
 
-		userRole, ok := claims["role"].(string)
-		if !ok || userRole == "" {
-			log.Printf("Missing or invalid 'role' claim: %v", claims["role"])
-			http.Error(w, "invalid token: missing role", http.StatusUnauthorized)
-			return
-		}
+		userID, _ := claims["sub"].(string)
+		userRole, _ := claims["role"].(string)
 
 		log.Printf("Token validated - UserID: %s, Role: %s", userID, userRole)
 
@@ -103,7 +85,14 @@ func (m *AuthMiddleware) RequireRole(roles []string, next http.HandlerFunc) http
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		ctx = context.WithValue(ctx, RoleKey, userRole)
+		ctx = context.WithValue(ctx, TokenKey, tokenString)
 
 		next(w, r.WithContext(ctx))
 	}
+}
+
+func (m *AuthMiddleware) isBlacklisted(claims jwt.MapClaims, ctx context.Context) bool {
+	jti, _ := claims["jti"].(string)
+	isRevoked, err := m.redisClient.Exists(ctx, "blacklist:"+jti).Result()
+	return err == nil && isRevoked > 0
 }

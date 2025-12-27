@@ -8,28 +8,31 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 type AuthMiddleware struct {
-	publicKey *rsa.PublicKey
+	publicKey   *rsa.PublicKey
+	redisClient *redis.Client
 }
 
-func NewAuthMiddleware(publicKey *rsa.PublicKey) *AuthMiddleware {
+func NewAuthMiddleware(publicKey *rsa.PublicKey, redisClient *redis.Client) *AuthMiddleware {
 	return &AuthMiddleware{
-		publicKey: publicKey,
+		publicKey:   publicKey,
+		redisClient: redisClient,
 	}
 }
 
-type contextKey string
+type ContextKey string
 
 const (
-	UserIDKey contextKey = "userID"
-	RoleKey   contextKey = "role"
+	UserIDKey ContextKey = "userID"
+	RoleKey   ContextKey = "role"
+	TokenKey  ContextKey = "token"
 )
 
-func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.HandlerFunc {
+func (m *AuthMiddleware) RequireRole(roles []string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract token from header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			log.Printf("Missing Authorization header")
@@ -37,16 +40,8 @@ func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.Ha
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			log.Printf("Invalid Authorization header format")
-			http.Error(w, "invalid authorization header", http.StatusUnauthorized)
-			return
-		}
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		tokenString := parts[1]
-
-		// Parse and validate token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 				return nil, jwt.ErrSignatureInvalid
@@ -54,55 +49,50 @@ func (m *AuthMiddleware) RequireRole(role string, next http.HandlerFunc) http.Ha
 			return m.publicKey, nil
 		})
 
-		if err != nil {
-			log.Printf("Token parse error: %v", err)
+		if err != nil || !token.Valid {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
 
-		if !token.Valid {
-			log.Printf("Token not valid")
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return
-		}
-
-		// Extract claims safely
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			log.Printf("Failed to extract claims")
 			http.Error(w, "invalid token claims", http.StatusUnauthorized)
 			return
 		}
 
-		// Safely get userID
-		userID, ok := claims["sub"].(string)
-		if !ok || userID == "" {
-			log.Printf("Missing or invalid 'sub' claim: %v", claims["sub"])
-			http.Error(w, "invalid token: missing user ID", http.StatusUnauthorized)
+		if revoked := m.isBlacklisted(claims, r.Context()); revoked {
+			http.Error(w, "token revoked", http.StatusUnauthorized)
 			return
 		}
 
-		// Safely get role
-		userRole, ok := claims["role"].(string)
-		if !ok || userRole == "" {
-			log.Printf("Missing or invalid 'role' claim: %v", claims["role"])
-			http.Error(w, "invalid token: missing role", http.StatusUnauthorized)
-			return
-		}
+		userID, _ := claims["sub"].(string)
+		userRole, _ := claims["role"].(string)
 
 		log.Printf("Token validated - UserID: %s, Role: %s", userID, userRole)
 
-		// Check role
-		if userRole != role {
-			log.Printf("Role mismatch: required %s, got %s", role, userRole)
+		allowedRoles := false
+		for _, r := range roles {
+			if userRole == r {
+				allowedRoles = true
+				break
+			}
+		}
+		if !allowedRoles {
+			log.Printf("Role mismatch: required one of %v, got %s", roles, userRole)
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
-		// Add to context
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		ctx = context.WithValue(ctx, RoleKey, userRole)
+		ctx = context.WithValue(ctx, TokenKey, tokenString)
 
 		next(w, r.WithContext(ctx))
 	}
+}
+
+func (m *AuthMiddleware) isBlacklisted(claims jwt.MapClaims, ctx context.Context) bool {
+	jti, _ := claims["jti"].(string)
+	isRevoked, err := m.redisClient.Exists(ctx, "blacklist:"+jti).Result()
+	return err == nil && isRevoked > 0
 }

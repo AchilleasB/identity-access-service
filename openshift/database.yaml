@@ -21,21 +21,6 @@ data:
         room_number VARCHAR(20)
     );
 
-    CREATE TABLE IF NOT EXISTS tokens (
-        token_hash VARCHAR(64) PRIMARY KEY,
-        user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP NOT NULL
-    );
-
-
-    CREATE TABLE IF NOT EXISTS token_blacklist (
-        token_hash VARCHAR(64) PRIMARY KEY,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_blacklist_hash ON token_blacklist(token_hash);
-
     -- Seed initial admin 
     INSERT INTO users (id, email, first_name, last_name, role)
     VALUES (

@@ -7,22 +7,27 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log"
 	"math/big"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/domain"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/ports"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
-type GoogleOAuthService struct {
+type AuthService struct {
 	clientID     string
 	clientSecret string
 	redirectURL  string
 	userRepo     ports.UserRepository
 	privateKey   *rsa.PrivateKey
+	redisClient  *redis.Client
 }
 
 type googleTokenResponse struct {
@@ -43,22 +48,31 @@ type googleJWKS struct {
 	} `json:"keys"`
 }
 
-func NewGoogleOAuthService(
+type RedisSession struct {
+	JTI string `json:"jti"`
+	Exp int64  `json:"exp"`
+}
+
+const TokenDuration = 30 * time.Minute
+
+func NewAuthService(
 	clientID, clientSecret, redirectURL string,
 	userRepo ports.UserRepository,
 	privateKey *rsa.PrivateKey,
-) *GoogleOAuthService {
-	return &GoogleOAuthService{
+	redisClient *redis.Client,
+) *AuthService {
+	return &AuthService{
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		redirectURL:  redirectURL,
 		userRepo:     userRepo,
 		privateKey:   privateKey,
+		redisClient:  redisClient,
 	}
 }
 
 // GenerateState creates a random state for CSRF protection
-func (s *GoogleOAuthService) GenerateState() (string, error) {
+func (s *AuthService) GenerateState() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -67,7 +81,7 @@ func (s *GoogleOAuthService) GenerateState() (string, error) {
 }
 
 // GetAuthURL returns the Google authorization URL
-func (s *GoogleOAuthService) GetAuthURL(state string) string {
+func (s *AuthService) GetAuthURL(state string) string {
 	params := url.Values{
 		"client_id":     {s.clientID},
 		"redirect_uri":  {s.redirectURL},
@@ -79,37 +93,114 @@ func (s *GoogleOAuthService) GetAuthURL(state string) string {
 }
 
 // Authenticate exchanges code for tokens, verifies, and returns system JWT
-func (s *GoogleOAuthService) Authenticate(ctx context.Context, code string) (string, error) {
-	// Exchange code for ID token
+func (s *AuthService) Authenticate(ctx context.Context, code string) (string, error) {
 	idToken, err := s.exchangeCode(ctx, code)
 	if err != nil {
 		return "", err
 	}
 
-	// Verify ID token and get email
 	email, err := s.verifyIDToken(ctx, idToken)
 	if err != nil {
 		return "", err
 	}
 
-	// Find user in database
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
 		return "", errors.New("user not registered")
 	}
 
-	// Generate system JWT
+	if user.Role == domain.RoleParent {
+		status, err := s.userRepo.GetParentStatus(ctx, user.ID)
+		if err != nil {
+			return "", err
+		}
+		if domain.ParentStatus(status) == domain.ParentDischarged {
+			return "", errors.New("parent is discharged")
+		}
+	}
+
+	jti := uuid.New().String()
+	expTime := time.Now().Add(TokenDuration)
+
 	claims := jwt.MapClaims{
 		"sub":  user.ID,
 		"role": string(user.Role),
+		"jti":  jti,
 		"iat":  time.Now().Unix(),
-		"exp":  time.Now().Add(24 * time.Hour).Unix(),
+		"exp":  expTime.Unix(),
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	return token.SignedString(s.privateKey)
+	signedToken, err := token.SignedString(s.privateKey)
+	if err != nil {
+		return "", err
+	}
+
+	session := RedisSession{JTI: jti, Exp: expTime.Unix()}
+	data, _ := json.Marshal(session)
+
+	err = s.redisClient.Set(ctx, "active_session:"+user.ID, data, TokenDuration).Err()
+	if err != nil {
+		log.Printf("Warning: failed to store active session in redis: %v", err)
+	}
+
+	return signedToken, nil
 }
 
-func (s *GoogleOAuthService) exchangeCode(ctx context.Context, code string) (string, error) {
+func (s *AuthService) Logout(ctx context.Context, tokenString string) error {
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	if err != nil {
+		return err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return errors.New("invalid claims")
+	}
+
+	jti, _ := claims["jti"].(string)
+	expTime, _ := claims["exp"].(float64)
+
+	return s.revokeToken(ctx, jti, int64(expTime))
+}
+
+func (s *AuthService) DischargeParent(ctx context.Context, parentID string) error {
+	metadata, err := s.redisClient.Get(ctx, "active_session:"+parentID).Result()
+	if err == redis.Nil {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	var session RedisSession
+	if err := json.Unmarshal([]byte(metadata), &session); err != nil {
+		return err
+	}
+
+	err = s.revokeToken(ctx, session.JTI, session.Exp)
+	if err != nil {
+		return err
+	}
+
+	err = s.redisClient.Del(ctx, "active_session:"+parentID).Err()
+	if err != nil {
+		return err
+	}
+
+	return s.userRepo.UpdateParentStatus(ctx, parentID)
+}
+
+// Internal helper to blacklist a specific JTI
+func (s *AuthService) revokeToken(ctx context.Context, jti string, expTime int64) error {
+	expirationTime := time.Unix(expTime, 0)
+	ttl := time.Until(expirationTime)
+	if ttl <= 0 {
+		return nil
+	}
+	return s.redisClient.Set(ctx, "blacklist:"+jti, "revoked", ttl).Err()
+}
+
+func (s *AuthService) exchangeCode(ctx context.Context, code string) (string, error) {
 	data := url.Values{
 		"client_id":     {s.clientID},
 		"client_secret": {s.clientSecret},
@@ -139,7 +230,7 @@ func (s *GoogleOAuthService) exchangeCode(ctx context.Context, code string) (str
 	return result.IDToken, nil
 }
 
-func (s *GoogleOAuthService) verifyIDToken(ctx context.Context, idToken string) (string, error) {
+func (s *AuthService) verifyIDToken(ctx context.Context, idToken string) (string, error) {
 	// Fetch Google's public keys
 	keys, err := s.fetchGoogleKeys(ctx)
 	if err != nil {
@@ -161,12 +252,6 @@ func (s *GoogleOAuthService) verifyIDToken(ctx context.Context, idToken string) 
 
 	claims := token.Claims.(*googleClaims)
 
-	// Verify audience
-	// if !claims.VerifyAudience(s.clientID, true) {
-	// 	return "", errors.New("invalid audience")
-	// }
-
-	// Verify email is present and verified
 	if claims.Email == "" || !claims.EmailVerified {
 		return "", errors.New("email not verified")
 	}
@@ -174,7 +259,7 @@ func (s *GoogleOAuthService) verifyIDToken(ctx context.Context, idToken string) 
 	return claims.Email, nil
 }
 
-func (s *GoogleOAuthService) fetchGoogleKeys(ctx context.Context) (map[string]*rsa.PublicKey, error) {
+func (s *AuthService) fetchGoogleKeys(ctx context.Context) (map[string]*rsa.PublicKey, error) {
 	req, _ := http.NewRequestWithContext(ctx, "GET", "https://www.googleapis.com/oauth2/v3/certs", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

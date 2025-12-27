@@ -64,18 +64,18 @@ func main() {
 	mux.HandleFunc("/health/live", healthHandler.Live)
 
 	// API endpoints
-	mux.HandleFunc("/login", authHandler.Login)
-	mux.HandleFunc("/auth/google/callback", authHandler.LoginCallback)
+	mux.HandleFunc("GET /login", authHandler.Login)
+	mux.HandleFunc("GET /auth/google/callback", authHandler.LoginCallback)
 
-	mux.Handle("/register",
+	mux.Handle("POST /register",
 		authMiddleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(registrationHandler.Register)),
 	)
 
-	mux.Handle("/logout",
+	mux.Handle("POST /logout",
 		authMiddleware.RequireRole([]string{"ADMIN", "PARENT"}, http.HandlerFunc(authHandler.Logout)),
 	)
 
-	mux.Handle("/discharge",
+	mux.Handle("POST /discharge",
 		authMiddleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(authHandler.DischargeParent)),
 	)
 

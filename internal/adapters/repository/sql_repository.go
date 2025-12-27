@@ -47,8 +47,8 @@ func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent) 
 	}
 
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO parents (user_id, room_number) VALUES ($1, $2)",
-		parent.ID, parent.RoomNumber,
+		"INSERT INTO parents (user_id, room_number, status) VALUES ($1, $2, $3)",
+		parent.ID, parent.RoomNumber, parent.Status,
 	)
 	if err != nil {
 		return nil, err
@@ -68,36 +68,23 @@ func (r *SQLRepository) CreateAdmin(ctx context.Context, user domain.User) (*dom
 	return &user, err
 }
 
-func (r *SQLRepository) SaveToken(ctx context.Context, userID, token string) error {
-	_, err := r.db.Exec(
-		"INSERT INTO tokens (user_id, token_hash, created_at, expires_at) VALUES ($1, $2, NOW(), NOW() + INTERVAL '7 days')",
-		userID,
-		token,
+func (r *SQLRepository) UpdateParentStatus(ctx context.Context, parentID string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE parents SET status = 'Discharged' WHERE user_id = $1",
+		parentID,
 	)
 	return err
 }
 
-func (r *SQLRepository) BlacklistToken(ctx context.Context, tokenHash string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+func (r *SQLRepository) GetParentStatus(ctx context.Context, parentID string) (string, error) {
+	var status string
+	err := r.db.QueryRowContext(
+		ctx,
+		"SELECT status FROM parents WHERE user_id = $1",
+		parentID,
+	).Scan(&status)
 	if err != nil {
-		return err
+		return "", err
 	}
-	defer tx.Rollback()
-
-	_, err = tx.ExecContext(ctx, "DELETE FROM tokens WHERE token_hash = $1", tokenHash)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx,
-		`INSERT INTO token_blacklist (token_hash, blacklisted_at) 
-         VALUES ($1, NOW()) 
-         ON CONFLICT (token_hash) DO NOTHING`,
-		tokenHash,
-	)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
+	return status, nil
 }

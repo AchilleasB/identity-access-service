@@ -9,6 +9,13 @@ const (
 	RoleParent Role = "PARENT"
 )
 
+type ParentStatus string
+
+const (
+	ParentActive     ParentStatus = "Active"
+	ParentDischarged ParentStatus = "Discharged"
+)
+
 type User struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
@@ -20,5 +27,6 @@ type User struct {
 
 type Parent struct {
 	User
-	RoomNumber string `json:"room_number"`
+	RoomNumber string       `json:"room_number"`
+	Status     ParentStatus `json:"status"`
 }

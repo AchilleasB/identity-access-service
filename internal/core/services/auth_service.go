@@ -231,13 +231,11 @@ func (s *AuthService) exchangeCode(ctx context.Context, code string) (string, er
 }
 
 func (s *AuthService) verifyIDToken(ctx context.Context, idToken string) (string, error) {
-	// Fetch Google's public keys
 	keys, err := s.fetchGoogleKeys(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	// Parse and verify token
 	token, err := jwt.ParseWithClaims(idToken, &googleClaims{}, func(t *jwt.Token) (interface{}, error) {
 		kid, _ := t.Header["kid"].(string)
 		key, ok := keys[kid]

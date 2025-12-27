@@ -25,13 +25,6 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type ParentStatus string
-
-const (
-	StatusActive     ParentStatus = "Active"
-	StatusDischarged ParentStatus = "Discharged"
-)
-
 type Parent struct {
 	User
 	RoomNumber string       `json:"room_number"`

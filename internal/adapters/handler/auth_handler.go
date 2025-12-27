@@ -18,6 +18,10 @@ func NewAuthHandler(auth *services.AuthService) *AuthHandler {
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	log.Printf("Login endpoint hit: %s %s", r.Method, r.URL.Path)
 
 	state, err := h.authService.GenerateState()
@@ -46,6 +50,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) LoginCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	log.Printf("Method: %s", r.Method)
 	log.Printf("URL: %s", r.URL.String())
 	log.Printf("Headers: %v", r.Header)
@@ -95,6 +103,10 @@ func (h *AuthHandler) LoginCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	tokenString, ok := r.Context().Value(middleware.TokenKey).(string)
 	if !ok || tokenString == "" {
 		http.Error(w, "missing token in context", http.StatusUnauthorized)
@@ -115,6 +127,10 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) DischargeParent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	var payload struct {
 		ParentId string `json:"parent_id"`
 	}

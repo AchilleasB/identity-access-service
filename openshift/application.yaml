@@ -87,6 +87,13 @@ spec:
                 configMapKeyRef:
                   name: identity-oauth-config
                   key: google-redirect-url
+            - name: REDIS_ADDR
+              value: "redis-service:6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
             - name: APP_VERSION
               value: "1.0.0"
           volumeMounts:

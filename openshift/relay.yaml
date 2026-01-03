@@ -49,9 +49,11 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - "pgrep -x identity-relay || exit 1"
-            initialDelaySeconds: 10
+                - "ps aux | grep identity-relay | grep -v grep"
+            initialDelaySeconds: 30
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               memory: "128Mi"

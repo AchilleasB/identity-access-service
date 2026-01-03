@@ -20,7 +20,6 @@ func main() {
 
 	cfg := config.LoadRelayConfig()
 
-	// Open database connection
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("relay: failed to open database: %v", err)
@@ -32,7 +31,6 @@ func main() {
 	}
 	log.Println("relay: connected to PostgreSQL")
 
-	// Create RabbitMQ publisher
 	message_broker, err := messaging.NewRabbitMQBroker(cfg.RabbitMQURL, cfg.BabyQueueName)
 	if err != nil {
 		log.Fatalf("relay: failed to create baby publisher: %v", err)
@@ -40,9 +38,8 @@ func main() {
 	defer message_broker.Close()
 	log.Println("relay: connected to RabbitMQ")
 
-	// Create the relay worker (needs dbURL for LISTEN/NOTIFY)
 	relay_worker := outbox.NewRelay(db, cfg.DatabaseURL, message_broker)
-	// Set up graceful shutdown
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -55,7 +52,6 @@ func main() {
 		cancel()
 	}()
 
-	// Start the relay (blocking)
 	if err := relay_worker.Start(ctx); err != nil && err != context.Canceled {
 		log.Fatalf("relay: error: %v", err)
 	}

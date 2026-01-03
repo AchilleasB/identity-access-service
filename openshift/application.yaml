@@ -1,4 +1,4 @@
-# ImageStream - Defines the image repository
+# ImageStream - Defines the image repository (shared by api and relay)
 apiVersion: image.openshift.io/v1
 kind: ImageStream
 metadata:
@@ -33,6 +33,11 @@ spec:
     type: Docker
     dockerStrategy:
       dockerfilePath: Dockerfile
+      buildArgs:
+        - name: DOCKER_BUILDKIT
+          value: "1"
+      stages:
+        - name: api 
   output:
     to:
       kind: ImageStreamTag
@@ -40,29 +45,34 @@ spec:
   triggers:
     - type: ConfigChange
 ---
-# Deployment - Runs the identity-access service
+# Deployment: identity-api
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: identity-access-service
+  name: identity-api
   labels:
-    app: identity-access-service
+    app: identity-api
+    component: api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: identity-access-service
+      app: identity-api
   template:
     metadata:
       labels:
-        app: identity-access-service
+        app: identity-api
+        component: api
     spec:
       containers:
-        - name: identity-access-service
+        - name: identity-api
           image: identity-access-service:latest
+          command: ["./identity-api"]
           ports:
             - containerPort: 8080
           env:
+            - name: PORT
+              value: "8080"
             - name: DB_CONNECTION_STRING
               valueFrom:
                 secretKeyRef:
@@ -94,8 +104,6 @@ spec:
                 secretKeyRef:
                   name: redis-secret
                   key: password
-            - name: APP_VERSION
-              value: "1.0.0"
           volumeMounts:
             - name: jwt-keys
               mountPath: "/etc/certs"
@@ -124,32 +132,32 @@ spec:
           secret:
             secretName: identity-rsa-keys
 ---
-# Service - Internal Networking for identity-access service
+# Service - Internal Networking for identity-api
 apiVersion: v1
 kind: Service
 metadata:
-  name: identity-access-service
+  name: identity-api
   labels:
-    app: identity-access-service
+    app: identity-api
 spec:
   ports:
     - port: 8080
       targetPort: 8080
       name: http
   selector:
-    app: identity-access-service
+    app: identity-api
 ---
 # Route - HTTPS handled by OKD router
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: identity-access-service
+  name: identity-api
   labels:
-    app: identity-access-service
+    app: identity-api
 spec:
   to:
     kind: Service
-    name: identity-access-service
+    name: identity-api
   port:
     targetPort: http
   tls:

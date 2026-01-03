@@ -125,6 +125,16 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["/usr/local/bin/pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]
+            initialDelaySeconds: 60
+            periodSeconds: 20
       volumes:
         - name: db-data
           persistentVolumeClaim:

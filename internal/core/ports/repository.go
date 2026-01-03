@@ -8,7 +8,7 @@ import (
 
 type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (*domain.User, error)
-	CreateParent(ctx context.Context, parent domain.Parent) (*domain.Parent, error)
+	CreateParent(ctx context.Context, parent domain.Parent, outboxPayload []byte) (*domain.Parent, error)
 	CreateAdmin(ctx context.Context, user domain.User) (*domain.User, error)
 	UpdateParentStatus(ctx context.Context, parentID string) error
 	GetParentStatus(ctx context.Context, parentID string) (string, error)

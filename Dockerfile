@@ -7,16 +7,23 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
+# Build both binaries
+RUN CGO_ENABLED=0 GOOS=linux go build -o identity-api ./cmd/api/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o identity-relay ./cmd/relay/main.go
 
+# Final stage: single image with both binaries
 FROM alpine:latest
 
 WORKDIR /app
 
-COPY --from=builder /app/main .
-RUN chmod 755 ./main
+# Copy both binaries
+COPY --from=builder /app/identity-api .
+COPY --from=builder /app/identity-relay .
+
+RUN chmod 755 ./identity-api ./identity-relay
 
 EXPOSE 8080
 
-CMD ["./main"]
+# Default command (overridden by Kubernetes deployment)
+CMD ["./identity-api"]
 

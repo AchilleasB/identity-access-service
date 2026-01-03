@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/domain"
@@ -13,15 +14,18 @@ type RegistrationService struct {
 	userRepo ports.UserRepository
 }
 
-func NewRegistrationService(userRepo ports.UserRepository) *RegistrationService {
-	return &RegistrationService{userRepo: userRepo}
+func NewRegistrationService(
+	userRepo ports.UserRepository,
+) *RegistrationService {
+	return &RegistrationService{
+		userRepo: userRepo,
+	}
 }
 
 func (s *RegistrationService) RegisterParent(
 	ctx context.Context,
 	email, firstName, lastName, roomNumber string,
 ) (string, error) {
-
 	parent := domain.Parent{
 		User: domain.User{
 			ID:        uuid.NewString(),
@@ -35,7 +39,22 @@ func (s *RegistrationService) RegisterParent(
 		Status:     domain.ParentActive,
 	}
 
-	_, err := s.userRepo.CreateParent(ctx, parent)
+	event := struct {
+		UserID     string `json:"user_id"`
+		LastName   string `json:"last_name"`
+		RoomNumber string `json:"room_number"`
+	}{
+		UserID:     parent.User.ID,
+		LastName:   parent.User.LastName,
+		RoomNumber: parent.RoomNumber,
+	}
+
+	outboxPayload, err := json.Marshal(event)
+	if err != nil {
+		return "Registration failed", err
+	}
+
+	_, err = s.userRepo.CreateParent(ctx, parent, outboxPayload)
 	if err != nil {
 		return "Registration failed", err
 	}

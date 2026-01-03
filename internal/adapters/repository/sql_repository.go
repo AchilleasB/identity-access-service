@@ -3,9 +3,12 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"time"
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/domain"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/ports"
+	"github.com/google/uuid"
 )
 
 type SQLRepository struct {
@@ -31,7 +34,7 @@ func (r *SQLRepository) FindByEmail(ctx context.Context, email string) (*domain.
 	return &user, nil
 }
 
-func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent) (*domain.Parent, error) {
+func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent, outboxPayload []byte) (*domain.Parent, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -52,6 +55,26 @@ func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent) 
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(outboxPayload) > 0 {
+		var tmp map[string]any
+		if err := json.Unmarshal(outboxPayload, &tmp); err != nil {
+			return nil, err
+		}
+
+		_, err = tx.ExecContext(ctx,
+			"INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+			uuid.NewString(),
+			"parent",
+			parent.ID,
+			"babies",
+			outboxPayload,
+			time.Now(),
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: rabbitmq-data
+  name: rabbitmq-data-v3
   labels:
     app: rabbitmq
 spec:
@@ -84,7 +84,7 @@ spec:
       volumes:
         - name: rabbitmq-data
           persistentVolumeClaim:
-            claimName: rabbitmq-data
+            claimName: rabbitmq-data-v3
 
 ---
 # Service for AMQP protocol (internal messaging)

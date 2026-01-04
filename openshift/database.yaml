@@ -140,7 +140,7 @@ spec:
       volumes:
         - name: db-data
           persistentVolumeClaim:
-            claimName: identity-db-pvc
+            claimName: identity-db-pvc-v3
         - name: init-script
           configMap:
             name: identity-db-init

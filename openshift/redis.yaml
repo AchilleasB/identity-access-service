@@ -58,7 +58,7 @@ spec:
       volumes:
         - name: redis-data
           persistentVolumeClaim:
-            claimName: redis-pvc
+            claimName: redis-pvc-v3
 
 ---
 # 3. Internal Service for Redis

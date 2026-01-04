@@ -20,7 +20,10 @@ spec:
       containers:
         - name: identity-outbox-relay
           image: identity-access-service:latest 
-          command: ["./identity-relay"]       
+          command: ["./identity-relay"]
+          ports:
+            - containerPort: 8090
+              name: health
           env:
             - name: DB_CONNECTION_STRING
               valueFrom:
@@ -45,11 +48,9 @@ spec:
             - name: BABY_QUEUE_NAME
               value: "babies"
           livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - "ps aux | grep identity-relay | grep -v grep"
+            httpGet:
+              path: /health
+              port: 8090
             initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 5

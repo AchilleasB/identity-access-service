@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "github.com/lib/pq"
 
@@ -40,6 +43,37 @@ func main() {
 
 	relay_worker := outbox.NewRelay(db, cfg.DatabaseURL, message_broker)
 
+	// Start health check HTTP server
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		status := "UP"
+		httpStatus := http.StatusOK
+
+		if !relay_worker.IsHealthy() {
+			status = "DOWN"
+			httpStatus = http.StatusServiceUnavailable
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(httpStatus)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    status,
+			"component": "outbox-relay",
+		})
+	})
+
+	healthServer := &http.Server{
+		Addr:    ":8090",
+		Handler: healthMux,
+	}
+
+	go func() {
+		log.Println("relay: starting health check server on :8090")
+		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("relay: health server error: %v", err)
+		}
+	}()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -49,6 +83,12 @@ func main() {
 	go func() {
 		sig := <-sigChan
 		log.Printf("relay: received signal %v, initiating shutdown...", sig)
+
+		// Shutdown health server gracefully
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		healthServer.Shutdown(shutdownCtx)
+
 		cancel()
 	}()
 

@@ -1,4 +1,4 @@
-# identity-outbox-relay - Guarantees event delivery from outbox to RabbitMQ
+# Deployment identity-outbox-relay
 apiVersion: apps/v1
 kind: Deployment
 metadata:

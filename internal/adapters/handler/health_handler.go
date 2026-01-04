@@ -4,29 +4,31 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type HealthHandler struct {
-	db        *sql.DB
-	startTime time.Time
-	version   string
+	db          *sql.DB
+	redisClient *redis.Client
+	startTime   time.Time
+	version     string
 }
 
-func NewHealthHandler(db *sql.DB) *HealthHandler {
+func NewHealthHandler(db *sql.DB, redisClient *redis.Client) *HealthHandler {
 	version := os.Getenv("APP_VERSION")
 	if version == "" {
 		version = "unknown"
 	}
 	return &HealthHandler{
-		db:        db,
-		startTime: time.Now(),
-		version:   version,
+		db:          db,
+		redisClient: redisClient,
+		startTime:   time.Now(),
+		version:     version,
 	}
 }
 
@@ -44,8 +46,30 @@ type Check struct {
 	Message string `json:"message,omitempty"`
 }
 
-// Health is for general health status (liveness probe in OpenShift)
+// Health is a simple liveness check - just confirms the Go process is running
 func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	response := HealthResponse{
+		Status:    "UP",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Uptime:    time.Since(h.startTime).Round(time.Second).String(),
+		Version:   h.version,
+		Checks:    map[string]Check{"process": {Status: "UP"}},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
+}
+
+// Ready checks if the service is ready to accept traffic (readiness probe)
+func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -55,7 +79,6 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	status := "UP"
 	httpStatus := http.StatusOK
 
-	// Database check
 	dbCheck := h.checkDatabase()
 	checks["database"] = dbCheck
 	if dbCheck.Status != "UP" {
@@ -63,24 +86,16 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 		httpStatus = http.StatusServiceUnavailable
 	}
 
-	// Memory check
-	memCheck := h.checkMemory()
-	checks["memory"] = memCheck
-
-	// Private key check
-	keyCheck := h.checkPrivateKey()
-	checks["private_key"] = keyCheck
-	if keyCheck.Status != "UP" {
+	redisCheck := h.checkRedis()
+	checks["redis"] = redisCheck
+	if redisCheck.Status != "UP" {
 		status = "DOWN"
 		httpStatus = http.StatusServiceUnavailable
 	}
 
-	response := HealthResponse{
-		Status:    status,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Uptime:    time.Since(h.startTime).Round(time.Second).String(),
-		Version:   h.version,
-		Checks:    checks,
+	response := map[string]interface{}{
+		"status": status,
+		"checks": checks,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -90,45 +105,9 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Ready checks if the service is ready to accept traffic (readiness probe in OpenShift)
-func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Check database connection with timeout
-	ctx := r.Context()
-	if err := h.db.PingContext(ctx); err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":  "DOWN",
-			"message": "Database not ready",
-		})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{
-		"status": "UP",
-	}); err != nil {
-		log.Printf("Failed to encode response: %v", err)
-	}
-}
-
-// Live is a simple liveness check (liveness probe in OpenShift)
+// Live is an alias for Health - simple liveness check
 func (h *HealthHandler) Live(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "UP",
-	})
+	h.Health(w, r)
 }
 
 func (h *HealthHandler) checkDatabase() Check {
@@ -144,27 +123,14 @@ func (h *HealthHandler) checkDatabase() Check {
 	return Check{Status: "UP"}
 }
 
-func (h *HealthHandler) checkMemory() Check {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
+func (h *HealthHandler) checkRedis() Check {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	allocMB := m.Alloc / 1024 / 1024
-	return Check{
-		Status:  "UP",
-		Message: fmt.Sprintf("Allocated: %d MB", allocMB),
-	}
-}
-
-func (h *HealthHandler) checkPrivateKey() Check {
-	keyPath := os.Getenv("PRIVATE_KEY_PATH")
-	if keyPath == "" {
-		keyPath = "/etc/certs/private.pem"
-	}
-
-	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+	if err := h.redisClient.Ping(ctx).Err(); err != nil {
 		return Check{
 			Status:  "DOWN",
-			Message: "Private key file not found",
+			Message: "Cannot connect to Redis",
 		}
 	}
 	return Check{Status: "UP"}

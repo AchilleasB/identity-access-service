@@ -36,7 +36,7 @@ func main() {
 	})
 
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		log.Fatalf("failed to connect to redis: %v", err)
+		log.Printf("Warning: Redis is not available yet: %v. App will continue and retry later.", err)
 	}
 	log.Println("Authenticated with Redis successfully")
 
@@ -54,7 +54,7 @@ func main() {
 
 	authHandler := handler.NewAuthHandler(authService)
 	registrationHandler := handler.NewRegistrationHandler(registrationService)
-	healthHandler := handler.NewHealthHandler(db)
+	healthHandler := handler.NewHealthHandler(db, redisClient)
 
 	mux := http.NewServeMux()
 

@@ -21,9 +21,9 @@ const (
 	outboxChannelName            = "outbox_channel"
 
 	// Event processing timeouts
-	eventProcessTimeout      = 30 * time.Second
-	batchProcessTimeout      = 60 * time.Second
-	periodicProcessInterval  = 90 * time.Second
+	eventProcessTimeout     = 30 * time.Second
+	batchProcessTimeout     = 60 * time.Second
+	periodicProcessInterval = 90 * time.Second
 
 	// Health check configuration
 	healthCheckStaleThreshold = 5 * time.Minute
@@ -59,8 +59,19 @@ func NewRelay(db *sql.DB, dbURL string, publisher ports.BabyEventPublisher) *Rel
 	}
 }
 
-// IsHealthy returns true if the relay is processing events normally
+// IsHealthy returns true if the relay process is alive and responding.
+// This is designed for Liveness probes - keeps checks simple to avoid false positives.
+// For Readiness probes, you should check circuit breaker state and dependency health.
 func (r *Relay) IsHealthy() bool {
+	// Simple check: is the process responsive?
+	// We don't check circuit breaker state here because:
+	// - Open circuit = degraded but recoverable (shouldn't kill pod)
+	// - Liveness is about "is process alive", not "is system healthy"
+	return r.isHealthy
+}
+
+// IsReady returns true if the relay can process events (for readiness probes).
+func (r *Relay) IsReady() bool {
 	// Check if circuit breaker is open (system is degraded)
 	if r.dbCB.State() == gobreaker.StateOpen {
 		return false

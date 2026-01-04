@@ -77,23 +77,37 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Channel to capture fatal errors from relay worker
+	errChan := make(chan error, 1)
+
+	// Start relay worker in background goroutine
+	go func() {
+		log.Println("relay: starting event processing worker...")
+		if err := relay_worker.Start(ctx); err != nil && err != context.Canceled {
+			log.Printf("relay: worker error: %v", err)
+			errChan <- err
+		}
+	}()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() {
-		sig := <-sigChan
+	// Wait for shutdown signal or fatal error
+	select {
+	case sig := <-sigChan:
 		log.Printf("relay: received signal %v, initiating shutdown...", sig)
-
-		// Shutdown health server gracefully
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-		healthServer.Shutdown(shutdownCtx)
-
 		cancel()
-	}()
 
-	if err := relay_worker.Start(ctx); err != nil && err != context.Canceled {
-		log.Fatalf("relay: error: %v", err)
+	case err := <-errChan:
+		log.Printf("relay: fatal error, shutting down: %v", err)
+		cancel()
+	}
+
+	// Shutdown health server gracefully
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := healthServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("relay: error shutting down health server: %v", err)
 	}
 
 	log.Println("relay: shutdown complete")

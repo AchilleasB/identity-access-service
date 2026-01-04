@@ -22,16 +22,21 @@ func (rmq *RabbitMQBroker) PublishBabyCreated(ctx context.Context, evt ports.Cre
 		}
 	}
 
-	return rmq.ch.PublishWithContext(
-		ctx,
-		"",            // exchange (default)
-		rmq.queueName, // routing key == queue name
-		false,         // mandatory
-		false,         // immediate
-		amqp.Publishing{
-			ContentType:  "application/json",
-			DeliveryMode: amqp.Persistent,
-			Body:         body,
-		},
-	)
+	// Use circuit breaker to protect RabbitMQ publish operation
+	_, err = rmq.cb.Execute(func() (interface{}, error) {
+		err := rmq.ch.PublishWithContext(
+			ctx,
+			"",            // exchange (default)
+			rmq.queueName, // routing key == queue name
+			false,         // mandatory
+			false,         // immediate
+			amqp.Publishing{
+				ContentType:  "application/json",
+				DeliveryMode: amqp.Persistent,
+				Body:         body,
+			},
+		)
+		return nil, err
+	})
+	return err
 }

@@ -67,11 +67,17 @@ func (r *Relay) IsHealthy() bool {
 	// We don't check circuit breaker state here because:
 	// - Open circuit = degraded but recoverable (shouldn't kill pod)
 	// - Liveness is about "is process alive", not "is system healthy"
+	// - Missing publisher = pod stays alive for Kubernetes to restart
 	return r.isHealthy
 }
 
 // IsReady returns true if the relay can process events (for readiness probes).
 func (r *Relay) IsReady() bool {
+	// Check if publisher is available (required for processing events)
+	if r.publisher == nil {
+		return false
+	}
+
 	// Check if circuit breaker is open (system is degraded)
 	if r.dbCB.State() == gobreaker.StateOpen {
 		return false
@@ -185,6 +191,12 @@ func (r *Relay) processEventByID(ctx context.Context, eventID string) error {
 				return nil, tx.Commit()
 			}
 
+			// Check if publisher is available before attempting to publish
+			if r.publisher == nil {
+				log.Printf("outbox relay: publisher not available, cannot process event %s", id)
+				return nil, nil // Don't mark as processed, will retry when publisher is available
+			}
+
 			if err := r.publisher.PublishBabyCreated(ctx, evt); err != nil {
 				return nil, err
 			}
@@ -250,6 +262,12 @@ func (r *Relay) processUnprocessedEvents(ctx context.Context) error {
 					log.Printf("outbox relay: invalid payload for event %s: %v", rec.ID, err)
 					_, _ = tx.ExecContext(ctx, `UPDATE outbox_events SET processed_at = NOW() WHERE id = $1`, rec.ID)
 					continue
+				}
+
+				// Check if publisher is available before attempting to publish
+				if r.publisher == nil {
+					log.Printf("outbox relay: publisher not available, skipping event %s", rec.ID)
+					continue // Don't mark as processed, will retry when publisher is available
 				}
 
 				if err := r.publisher.PublishBabyCreated(ctx, evt); err != nil {

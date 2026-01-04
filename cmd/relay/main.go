@@ -25,21 +25,19 @@ func main() {
 
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("relay: failed to open database: %v", err)
+		log.Printf("relay: ERROR - failed to open database: %v", err)
+	} else {
+		defer db.Close()
+		log.Println("relay: database connection initialized - circuit breaker will validate on first operation")
 	}
-	defer db.Close()
-
-	if err := db.Ping(); err != nil {
-		log.Fatalf("relay: failed to ping database: %v", err)
-	}
-	log.Println("relay: connected to PostgreSQL")
 
 	message_broker, err := messaging.NewRabbitMQBroker(cfg.RabbitMQURL, cfg.BabyQueueName)
 	if err != nil {
-		log.Fatalf("relay: failed to create baby publisher: %v", err)
+		log.Printf("relay: WARNING - failed to create baby publisher: %v", err)
+	} else {
+		defer message_broker.Close()
+		log.Println("relay: connected to RabbitMQ")
 	}
-	defer message_broker.Close()
-	log.Println("relay: connected to RabbitMQ")
 
 	relay_worker := outbox.NewRelay(db, cfg.DatabaseURL, message_broker)
 

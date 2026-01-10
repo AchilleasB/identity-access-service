@@ -111,6 +111,13 @@ func (h *HealthHandler) Live(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HealthHandler) checkDatabase() Check {
+	if h.db == nil {
+		return Check{
+			Status:  "DOWN",
+			Message: "Database connection is not initialized",
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -124,6 +131,13 @@ func (h *HealthHandler) checkDatabase() Check {
 }
 
 func (h *HealthHandler) checkRedis() Check {
+	if h.redisClient == nil {
+		return Check{
+			Status:  "DOWN",
+			Message: "Redis client is not initialized",
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

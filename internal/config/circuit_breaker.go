@@ -13,7 +13,7 @@ func NewCircuitBreaker(name string) *gobreaker.CircuitBreaker {
 	var timeout time.Duration
 
 	// Use different timeouts for different dependencies
-	// This aligns with health check timeouts (5s) to prevent race conditions
+	// and align with health check timeouts (5s) to prevent race conditions
 	switch {
 	case name == "Redis-Auth":
 		timeout = time.Second * 5 // Align with health check timeout

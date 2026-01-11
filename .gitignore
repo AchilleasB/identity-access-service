@@ -35,6 +35,8 @@ bin/
 # Test coverage
 *.out
 coverage.html
+run-unit-tests.bat
+run-integration-tests.bat
 
 # Dependency directories
 vendor/

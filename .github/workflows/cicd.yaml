@@ -196,23 +196,6 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: go mod download
 
-      - name: Wait for services to be ready
-        run: |
-          echo "Waiting for PostgreSQL..."
-          until pg_isready -h localhost -p 5432 -U testuser; do
-            sleep 1
-          done
-          echo "PostgreSQL is ready"
-          echo "Waiting for Redis..."
-          until redis-cli -h localhost ping | grep -q PONG; do
-            sleep 1
-          done
-          echo "Redis is ready"
-
-          echo "Waiting for RabbitMQ..."
-          sleep 10  # RabbitMQ takes longer to initialize
-          echo "RabbitMQ should be ready"
-
       - name: Run API Integration Tests
         working-directory: ${{ env.WORKING_DIR }}
         env:

@@ -159,16 +159,18 @@ identity-access-service/
 │   │       └── registration_service.go
 │   └── config/
 │       ├── config.go            # API configuration
-│       └── relay_config.go      # Relay configuration
+│       ├── relay_config.go      # Relay configuration
+│       └── circuit_breaker.go   # Circuit breaker configuration
 ├── openshift/                   # OKD/OpenShift deployment
 │   ├── application.yaml         # API deployment
 │   ├── relay.yaml               # Relay deployment
 │   ├── database.yaml            # PostgreSQL resources
+│   ├── rabbitmq.yaml            # RabbitMQ resources
 │   └── redis.yaml               # Redis resources
 ├── Dockerfile
 ├── go.mod
 ├── go.sum
-└── .gitignore
+└── README.md
 ```
 
 ## API Endpoints
@@ -192,7 +194,32 @@ identity-access-service/
 - **Token Verification** - Google ID tokens verified via JWKS
 - **Token Revocation** - Redis-backed blacklist for logout/discharge
 - **Role-Based Access** - Admin-only registration and discharge endpoints
+- **Non-Root Container** - Runs as unprivileged user (UID 1001)
 - **HTTPS** - TLS termination at OKD Route level
+
+## CI/CD Pipeline
+
+The GitHub Actions workflow (`.github/workflows/identity-access-service.yaml`) runs:
+
+```
+┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+│  Lint    │──▶│  Unit    │──▶│ Integr.  │──▶│  Build   │──▶│ Deploy   │
+│  Check   │   │  Tests   │   │  Tests   │   │  Image   │   │  to OKD  │
+└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
+     │              │              │              │              │
+     ▼              ▼              ▼              ▼              ▼
+  golangci-    No external    PostgreSQL    Docker        OKD Webhook
+   lint        dependencies   Redis         Buildx        Trigger
+                              RabbitMQ
+```
+
+### Pipeline Stages
+
+1. **Lint**: Static analysis with golangci-lint
+2. **Unit Tests**: Fast tests with mocks (no infrastructure)
+3. **Integration Tests**: Tests with PostgreSQL, Redis, RabbitMQ services
+4. **Build**: Docker images for API and Relay
+5. **Deploy**: Trigger OKD webhook for deployment
 
 ## License
 MIT

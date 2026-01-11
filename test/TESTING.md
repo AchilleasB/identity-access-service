@@ -128,28 +128,3 @@ Located in `test/mocks/publisher_mock.go`
 **Purpose:** Replaces RabbitMQ for relay testing.
 
 ---
-
-## CI/CD Pipeline
-
-The GitHub Actions workflow (`.github/workflows/identity-access-service.yaml`) runs:
-
-```
-┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
-│  Lint    │──▶│  Unit    │──▶│ Integr.  │──▶│  Build   │──▶│ Deploy   │
-│  Check   │   │  Tests   │   │  Tests   │   │  Image   │   │  to OKD  │
-└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
-     │              │              │              │              │
-     ▼              ▼              ▼              ▼              ▼
-  golangci-    No external    PostgreSQL    Docker        OKD Webhook
-   lint        dependencies   Redis         Buildx        Trigger
-                              RabbitMQ
-```
-
-### Pipeline Stages
-
-1. **Lint**: Static analysis with golangci-lint
-2. **Unit Tests**: Fast tests with mocks (no infrastructure)
-3. **Integration Tests**: Tests with PostgreSQL, Redis, RabbitMQ services
-4. **Build**: Docker images for API and Relay
-5. **Deploy**: Trigger OKD webhook for deployment
----

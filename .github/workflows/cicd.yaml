@@ -1,0 +1,304 @@
+# GitHub Actions CI/CD Pipeline for Identity Access Service
+# =============================================================================
+# This workflow runs tests and triggers OKD to build and deploy
+#
+# WORKFLOW OVERVIEW:
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                           CI/CD PIPELINE                                     │
+# │                                                                              │
+# │  GITHUB ACTIONS (Test & Validate)              OKD (Build & Deploy)         │
+# │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌─────────────────────────┐  │
+# │  │  Lint    │──▶│  Unit    │──▶│ Integr.  │──▶│ Trigger OKD BuildConfig │  │
+# │  │  Check   │   │  Tests   │   │  Tests   │   │ (OKD builds & deploys)  │  │
+# │  └──────────┘   └──────────┘   └──────────┘   └─────────────────────────┘  │
+# │                                                                              │
+# │  All tests must pass before OKD build is triggered                          │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# TRIGGER: Push to main branch or pull request
+
+name: Identity Access Service CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+
+# Environment variables shared across jobs
+env:
+  GO_VERSION: '1.24'
+  SERVICE_NAME: identity-access-service
+  WORKING_DIR: .
+
+jobs:
+  # ==========================================================================
+  # JOB 1: Lint and Static Analysis (DISABLED TEMPORARILY)
+  # ==========================================================================
+#   lint:
+#     name: Lint & Static Analysis
+#     runs-on: ubuntu-latest
+    
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Set up Go
+#         uses: actions/setup-go@v5
+#         with:
+#           go-version: ${{ env.GO_VERSION }}
+#           cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+#       - name: Download dependencies
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: go mod download
+
+#       - name: Run golangci-lint
+#         uses: golangci/golangci-lint-action@v6
+#         with:
+#           version: v1.60.1
+#           working-directory: ${{ env.WORKING_DIR }}
+#           args: --timeout=5m ./...
+
+#       - name: Check Go mod tidy
+#         working-directory: ${{ env.WORKING_DIR }}
+#         run: |
+#           go mod tidy
+#           git diff --exit-code go.mod go.sum
+
+  # ==========================================================================
+  # JOB 2: Unit Tests (API & Relay)
+  # ==========================================================================
+  # Unit tests run without external dependencies using mocks.
+  # They verify individual components work correctly in isolation.
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    # needs: lint
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+      - name: Download dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: go mod download
+
+      - name: Run API Unit Tests
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          echo "Running API Unit Tests..."
+          go test -v -race -coverprofile=api-unit-coverage.out ./test/api/unit/...
+
+      - name: Run Relay Unit Tests
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          echo "Running Relay Unit Tests..."
+          go test -v -race -coverprofile=relay-unit-coverage.out ./test/relay/unit/...
+
+      - name: Combine Coverage Reports
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          echo "mode: atomic" > coverage.out
+          tail -n +2 api-unit-coverage.out >> coverage.out 2>/dev/null || true
+          tail -n +2 relay-unit-coverage.out >> coverage.out 2>/dev/null || true
+
+      - name: Generate Coverage Report
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          go tool cover -func=coverage.out
+          echo "Coverage report generated"
+
+      - name: Upload Unit Test Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-coverage
+          path: ${{ env.WORKING_DIR }}/coverage.out
+          retention-days: 7
+
+  # ==========================================================================
+  # JOB 3: Integration Tests
+  # ==========================================================================
+  # Integration tests verify components work together with real dependencies.
+  # Uses Docker Compose to spin up PostgreSQL, Redis, and RabbitMQ.
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    services:
+      # PostgreSQL for database integration tests
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      # Redis for session and cache testing
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      # RabbitMQ for relay integration tests
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ${{ env.WORKING_DIR }}/go.sum
+
+      - name: Download dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: go mod download
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for PostgreSQL..."
+          until pg_isready -h localhost -p 5432 -U testuser; do
+            sleep 1
+          done
+          echo "PostgreSQL is ready"
+          echo "Waiting for Redis..."
+          until redis-cli -h localhost ping | grep -q PONG; do
+            sleep 1
+          done
+          echo "Redis is ready"
+
+          echo "Waiting for RabbitMQ..."
+          sleep 10  # RabbitMQ takes longer to initialize
+          echo "RabbitMQ should be ready"
+
+      - name: Run API Integration Tests
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          TEST_DB_CONNECTION_STRING: "postgres://testuser:testpassword@localhost:5432/testdb?sslmode=disable"
+          TEST_REDIS_ADDRESS: "localhost:6379"
+          TEST_REDIS_PASSWORD: ""
+        run: |
+          echo "Running API Integration Tests..."
+          go test -v -race -coverprofile=api-integration-coverage.out ./test/api/integration/...
+
+      - name: Run Relay Integration Tests
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          TEST_DB_CONNECTION_STRING: "postgres://testuser:testpassword@localhost:5432/testdb?sslmode=disable"
+          TEST_RABBITMQ_URL: "amqp://guest:guest@localhost:5672/"
+          BABY_QUEUE_NAME: "test_babies"
+        run: |
+          echo "Running Relay Integration Tests..."
+          go test -v -race -coverprofile=relay-integration-coverage.out ./test/relay/integration/...
+
+      - name: Upload Integration Test Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-coverage
+          path: |
+            ${{ env.WORKING_DIR }}/api-integration-coverage.out
+            ${{ env.WORKING_DIR }}/relay-integration-coverage.out
+          retention-days: 7
+
+  # ==========================================================================
+  # JOB 4: Trigger OKD Build & Deploy (DISABLED DUE TO FIREWALL)
+  # ==========================================================================
+  # Triggers OKD BuildConfig via webhook after all tests pass.
+  # OKD will pull the code, build the image, and deploy automatically.
+#   deploy:
+#     name: Trigger OKD Build & Deploy
+#     runs-on: ubuntu-latest
+#     needs: [unit-tests, integration-tests]
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+#     steps:
+#       - name: Trigger OKD BuildConfig Webhook
+#         run: |
+#           echo "Triggering OKD BuildConfig webhook..."
+#           echo "OKD will pull the code, build the image, and deploy."
+          
+#           # Generic webhook - secret is embedded in URL path, no auth header needed
+#           # -k flag allows self-signed certificates
+#           curl -X POST "${{ secrets.OKD_WEBHOOK_URL }}" \
+#             -H "Content-Type: application/json" \
+#             -d '{"commit": "${{ github.sha }}", "ref": "${{ github.ref }}"}' \
+#             -k --fail --silent --show-error
+          
+#           echo "OKD build triggered successfully!"
+
+#       - name: Deployment Summary
+#         run: |
+#           echo "## Deployment Triggered" >> $GITHUB_STEP_SUMMARY
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+#           echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+#           echo "| Service | identity-access-service |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Triggered at | $(date -u) |" >> $GITHUB_STEP_SUMMARY
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "**Note:** OKD is now building the image and will deploy automatically." >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # JOB 5: Notify on Failure
+  # ==========================================================================
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    # needs: [lint, unit-tests, integration-tests, deploy]
+    if: failure()
+    
+    steps:
+      - name: Create failure summary
+        run: |
+          echo "## Pipeline Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "One or more jobs failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Author | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY

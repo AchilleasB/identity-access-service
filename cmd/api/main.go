@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/handler"
@@ -58,6 +59,9 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// Metrics endpoint
+	mux.Handle("/metrics", promhttp.Handler())
+
 	// Health endpoints (OpenShift compatible)
 	mux.HandleFunc("/health", healthHandler.Health)
 	mux.HandleFunc("/health/ready", healthHandler.Ready)
@@ -79,8 +83,11 @@ func main() {
 		authMiddleware.RequireRole([]string{"ADMIN"}, http.HandlerFunc(authHandler.DischargeParent)),
 	)
 
+	// Wrap the mux with the metrics middleware
+	loggedRouter := middleware.MetricsMiddleware(mux)
+
 	log.Printf("Starting server on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
+	if err := http.ListenAndServe(":"+cfg.Port, loggedRouter); err != nil {
 		log.Fatalf("Could not start server: %s\n", err)
 	}
 }

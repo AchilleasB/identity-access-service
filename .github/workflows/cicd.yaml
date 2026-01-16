@@ -4,14 +4,14 @@
 #
 # WORKFLOW OVERVIEW:
 # ┌─────────────────────────────────────────────────────────────────────────────┐
-# │                           CI/CD PIPELINE                                     │
-# │                                                                              │
+# │                           CI/CD PIPELINE                                    │
+# │                                                                             │
 # │  GITHUB ACTIONS (Test & Validate)              OKD (Build & Deploy)         │
-# │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌─────────────────────────┐  │
-# │  │  Lint    │──▶│  Unit    │──▶│ Integr.  │──▶│ Trigger OKD BuildConfig │  │
-# │  │  Check   │   │  Tests   │   │  Tests   │   │ (OKD builds & deploys)  │  │
-# │  └──────────┘   └──────────┘   └──────────┘   └─────────────────────────┘  │
-# │                                                                              │
+# │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌─────────────────────────┐   │
+# │  │  Lint    │──▶│  Unit    │──▶│ Integr. │──▶│ Trigger OKD BuildConfig │  │
+# │  │  Check   │   │  Tests   │   │  Tests   │   │ (OKD builds & deploys)  │   │
+# │  └──────────┘   └──────────┘   └──────────┘   └─────────────────────────┘   │
+# │                                                                             │
 # │  All tests must pass before OKD build is triggered                          │
 # └─────────────────────────────────────────────────────────────────────────────┘
 #

@@ -199,27 +199,22 @@ identity-access-service/
 
 ## CI/CD Pipeline
 
-The GitHub Actions workflow (`.github/workflows/identity-access-service.yaml`) runs:
+The GitHub Actions workflow (`.github/workflows/cicd.yaml`) implements a comprehensive CI/CD pipeline:
 
+### Pipeline Overview
 ```
-┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
-│  Lint    │──▶│  Unit    │──▶│ Integr.  │──▶│  Build   │──▶│ Deploy   │
-│  Check   │   │  Tests   │   │  Tests   │   │  Image   │   │  to OKD  │
-└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
-     │              │              │              │              │
-     ▼              ▼              ▼              ▼              ▼
-  golangci-    No external    PostgreSQL    Docker        OKD Webhook
-   lint        dependencies   Redis         Buildx        Trigger
-                              RabbitMQ
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CI/CD PIPELINE                                    │
+│                                                                             │
+│  GITHUB ACTIONS (Test & Validate)              OKD (Build & Deploy)         │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌─────────────────────────┐   │
+│  │  Lint    │──▶│  Unit    │──▶│ Integr. │──▶│ Trigger OKD BuildConfig │  │
+│  │  Check   │   │  Tests   │   │  Tests   │   │ (OKD builds & deploys)  │   │
+│  └──────────┘   └──────────┘   └──────────┘   └─────────────────────────┘   │
+│                                                                             │
+│  All tests must pass before OKD build is triggered                          │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-### Pipeline Stages
-
-1. **Lint**: Static analysis with golangci-lint
-2. **Unit Tests**: Fast tests with mocks (no infrastructure)
-3. **Integration Tests**: Tests with PostgreSQL, Redis, RabbitMQ services
-4. **Build**: Docker images for API and Relay
-5. **Deploy**: Trigger OKD webhook for deployment
 
 ## License
 MIT

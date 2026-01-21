@@ -47,7 +47,7 @@ import (
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/handler"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/adapters/repository"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/services"
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 )
 
 // testDB holds the test database connection.

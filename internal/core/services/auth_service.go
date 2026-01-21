@@ -83,11 +83,11 @@ func (s *AuthService) GenerateState() (string, error) {
 // GetAuthURL returns the Google authorization URL
 func (s *AuthService) GetAuthURL(state string) string {
 	params := url.Values{
-		"client_id":     {s.clientID},
-		"redirect_uri":  {s.redirectURL},
-		"response_type": {"code"},
-		"scope":         {"openid email"},
-		"state":         {state},
+		"client_id":     []string{s.clientID},
+		"redirect_uri":  []string{s.redirectURL},
+		"response_type": []string{"code"},
+		"scope":         []string{"openid email"},
+		"state":         []string{state},
 	}
 	return "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
 }

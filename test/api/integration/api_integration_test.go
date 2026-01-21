@@ -277,7 +277,7 @@ func TestIntegration_DuplicateEmail(t *testing.T) {
 
 	// First registration should succeed
 	resp, _ := http.Post(server.URL+"/register", "application/json", bytes.NewReader(jsonBody))
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("first registration failed: %d", resp.StatusCode)
 	}
@@ -322,7 +322,7 @@ func TestIntegration_OutboxEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make request: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	// Verify outbox event was created
 	var count int

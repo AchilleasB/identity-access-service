@@ -177,7 +177,7 @@ func TestEventPayloadSerialization(t *testing.T) {
 	// Simulate what happens in the relay
 	publisher := mocks.NewMockBabyEventPublisher()
 	ctx := context.Background()
-	publisher.PublishBabyCreated(ctx, original)
+	_ = publisher.PublishBabyCreated(ctx, original)
 
 	// Retrieve and compare
 	events := publisher.GetPublishedEvents()

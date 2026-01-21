@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 )
 
 // MockRedisClient provides a minimal mock for Redis operations used in auth.

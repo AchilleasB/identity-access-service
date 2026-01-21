@@ -16,9 +16,9 @@ import (
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/domain"
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/core/ports"
-	"github.com/golang-jwt/jwt/v5"
+	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 )
 
 type AuthService struct {
@@ -82,13 +82,12 @@ func (s *AuthService) GenerateState() (string, error) {
 
 // GetAuthURL returns the Google authorization URL
 func (s *AuthService) GetAuthURL(state string) string {
-	params := url.Values{
-		"client_id":     []string{s.clientID},
-		"redirect_uri":  []string{s.redirectURL},
-		"response_type": []string{"code"},
-		"scope":         []string{"openid email"},
-		"state":         []string{state},
-	}
+	params := url.Values{}
+	params.Set("client_id", s.clientID)
+	params.Set("redirect_uri", s.redirectURL)
+	params.Set("response_type", "code")
+	params.Set("scope", "openid email")
+	params.Set("state", state)
 	return "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
 }
 
@@ -201,13 +200,12 @@ func (s *AuthService) revokeToken(ctx context.Context, jti string, expTime int64
 }
 
 func (s *AuthService) exchangeCode(ctx context.Context, code string) (string, error) {
-	data := url.Values{
-		"client_id":     {s.clientID},
-		"client_secret": {s.clientSecret},
-		"code":          {code},
-		"grant_type":    {"authorization_code"},
-		"redirect_uri":  {s.redirectURL},
-	}
+	data := url.Values{}
+	data.Set("client_id", s.clientID)
+	data.Set("client_secret", s.clientSecret)
+	data.Set("code", code)
+	data.Set("grant_type", "authorization_code")
+	data.Set("redirect_uri", s.redirectURL)
 
 	req, _ := http.NewRequestWithContext(ctx, "POST", "https://oauth2.googleapis.com/token", strings.NewReader(data.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

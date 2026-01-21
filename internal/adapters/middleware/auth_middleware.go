@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/AchilleasB/baby-kliniek/identity-access-service/internal/config"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/redis/go-redis/v9"
+	jwt "github.com/golang-jwt/jwt/v5"
+	redis "github.com/redis/go-redis/v9"
 	"github.com/sony/gobreaker"
 )
 

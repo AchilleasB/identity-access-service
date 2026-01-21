@@ -85,7 +85,7 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
-    # needs: lint
+    needs: lint
     
     steps:
       - name: Checkout code
@@ -286,7 +286,7 @@ jobs:
   notify-failure:
     name: Notify on Failure
     runs-on: ubuntu-latest
-    # needs: [lint, unit-tests, integration-tests, deploy]
+    needs: [lint, unit-tests, integration-tests, deploy]
     if: failure()
     
     steps:

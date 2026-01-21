@@ -139,9 +139,9 @@ func setupTestSchema(db *sql.DB) error {
 
 // cleanupTestData removes all test data.
 func cleanupTestData(db *sql.DB) {
-	db.Exec("DELETE FROM parents")
-	db.Exec("DELETE FROM outbox_events")
-	db.Exec("DELETE FROM users")
+	_, _ = db.Exec("DELETE FROM parents")
+	_, _ = db.Exec("DELETE FROM outbox_events")
+	_, _ = db.Exec("DELETE FROM users")
 }
 
 // TestIntegration_RegisterParent tests the full registration flow.
@@ -342,7 +342,7 @@ func TestIntegration_OutboxEvent(t *testing.T) {
 	}
 
 	var evt map[string]string
-	json.Unmarshal(payload, &evt)
+	_ = json.Unmarshal(payload, &evt)
 
 	if evt["last_name"] != "Test" {
 		t.Errorf("expected last_name 'Test' in payload, got %q", evt["last_name"])

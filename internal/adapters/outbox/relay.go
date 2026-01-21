@@ -140,7 +140,7 @@ func (r *Relay) Start(ctx context.Context) error {
 
 		case <-time.After(periodicProcessInterval):
 			// Periodic ping to keep connection alive and catch any missed events
-			go r.listener.Ping()
+			go func() { _ = r.listener.Ping() }()
 
 			// Also process any unprocessed events (safety net)
 			if err := r.processUnprocessedEvents(ctx); err != nil {
@@ -163,7 +163,7 @@ func (r *Relay) processEventByID(ctx context.Context, eventID string) error {
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		// Lock and fetch the event
 		var id, eventType string
@@ -222,7 +222,7 @@ func (r *Relay) processUnprocessedEvents(ctx context.Context) error {
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		rows, err := tx.QueryContext(ctx, `
 			SELECT id, event_type, payload

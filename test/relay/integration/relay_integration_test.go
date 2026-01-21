@@ -140,7 +140,7 @@ func setupRelayTestSchema(db *sql.DB) error {
 
 // cleanupRelayTestData removes all test data.
 func cleanupRelayTestData(db *sql.DB) {
-	db.Exec("DELETE FROM outbox_events")
+	_, _ = db.Exec("DELETE FROM outbox_events")
 }
 
 // TestIntegration_RelayProcessesEvent tests end-to-end event processing.
@@ -163,7 +163,7 @@ func TestIntegration_RelayProcessesEvent(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		relay.Start(ctx)
+		_ = relay.Start(ctx)
 	}()
 
 	// Give relay time to start listening
@@ -258,7 +258,7 @@ func TestIntegration_RelayProcessesUnprocessedOnStartup(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		relay.Start(ctx)
+		_ = relay.Start(ctx)
 	}()
 
 	// Wait for catch-up processing
@@ -307,7 +307,7 @@ func TestIntegration_RelayHandlesInvalidPayload(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		relay.Start(ctx)
+		_ = relay.Start(ctx)
 	}()
 
 	time.Sleep(1 * time.Second)

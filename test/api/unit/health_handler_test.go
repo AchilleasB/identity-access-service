@@ -1,7 +1,6 @@
 package unit
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -125,11 +124,4 @@ func TestHealthHandler_UptimeIncreases(t *testing.T) {
 	if response.Uptime == "" {
 		t.Error("expected non-empty uptime")
 	}
-}
-
-// MockDB creates a mock database connection for testing.
-// For real integration tests, use sqlmock or a test database.
-func createMockDB() *sql.DB {
-	// Returns nil - real DB testing should use integration tests
-	return nil
 }

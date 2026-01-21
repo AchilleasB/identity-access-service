@@ -55,7 +55,7 @@ func (r *SQLRepository) CreateParent(ctx context.Context, parent domain.Parent, 
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		_, err = tx.ExecContext(ctx,
 			"INSERT INTO users (id, email, role, first_name, last_name, created_at) VALUES ($1, $2, $3, $4, $5, $6)",

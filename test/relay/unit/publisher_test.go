@@ -102,8 +102,8 @@ func TestMockPublisher_Reset(t *testing.T) {
 
 	// Publish some events
 	ctx := context.Background()
-	publisher.PublishBabyCreated(ctx, ports.CreateBabyEvent{UserID: "1"})
-	publisher.PublishBabyCreated(ctx, ports.CreateBabyEvent{UserID: "2"})
+	_ = publisher.PublishBabyCreated(ctx, ports.CreateBabyEvent{UserID: "1"})
+	_ = publisher.PublishBabyCreated(ctx, ports.CreateBabyEvent{UserID: "2"})
 
 	if publisher.GetPublishCount() != 2 {
 		t.Fatalf("expected 2 calls before reset")
@@ -136,7 +136,7 @@ func TestMockPublisher_ConcurrentPublish(t *testing.T) {
 				LastName:   "Test",
 				RoomNumber: "101",
 			}
-			publisher.PublishBabyCreated(ctx, event)
+			_ = publisher.PublishBabyCreated(ctx, event)
 			done <- true
 		}(i)
 	}
